@@ -22,46 +22,30 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [mode, setMode] = useState("connexion");
   const [identifiant, setIdentifiant] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    setInfo("");
     setLoading(true);
 
     const email = identifiant.includes("@") ? identifiant.trim() : emailDepuisIdentifiant(identifiant);
 
-    if (mode === "connexion") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setLoading(false);
-      if (error) {
-        setError(
-          error.message === "Invalid login credentials"
-            ? "Identifiant ou mot de passe incorrect."
-            : error.message
-        );
-        return;
-      }
-      router.push("/dashboard");
-      router.refresh();
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      setLoading(false);
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      setInfo(
-        "Compte créé. Vérifie ta boîte mail pour confirmer ton adresse avant de te connecter."
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      setError(
+        error.message === "Invalid login credentials"
+          ? "Identifiant ou mot de passe incorrect."
+          : error.message
       );
-      setMode("connexion");
+      return;
     }
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -88,23 +72,19 @@ export default function LoginPage() {
           Terminale STI2D SIN
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 24px" }}>
-          {mode === "connexion" ? "Connexion" : "Créer mon compte professeur"}
+          Connexion
         </h1>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-            {mode === "connexion" ? "Identifiant" : "Adresse e-mail"}
+            Identifiant
             <input
               type="text"
               required
               value={identifiant}
               onChange={(e) => setIdentifiant(e.target.value)}
               style={inputStyle}
-              placeholder={
-                mode === "connexion"
-                  ? "identifiant élève ou email professeur"
-                  : "prenom.nom@exemple.fr"
-              }
+              placeholder="identifiant élève ou email professeur"
               autoCapitalize="none"
               autoCorrect="off"
             />
@@ -115,22 +95,15 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              minLength={mode === "connexion" ? undefined : 8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={inputStyle}
-              placeholder={mode === "connexion" ? "" : "8 caractères minimum"}
             />
           </label>
 
           {error && (
             <div style={{ background: COLORS.redBg, color: COLORS.red, borderRadius: 8, padding: "8px 12px", fontSize: 12.5 }}>
               {error}
-            </div>
-          )}
-          {info && (
-            <div style={{ background: COLORS.greenBg, color: COLORS.green, borderRadius: 8, padding: "8px 12px", fontSize: 12.5 }}>
-              {info}
             </div>
           )}
 
@@ -149,31 +122,13 @@ export default function LoginPage() {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? "..." : mode === "connexion" ? "Se connecter" : "Créer le compte"}
+            {loading ? "..." : "Se connecter"}
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "connexion" ? "creation" : "connexion");
-            setError("");
-            setInfo("");
-          }}
-          style={{
-            marginTop: 16,
-            background: "none",
-            border: "none",
-            color: COLORS.accent,
-            fontSize: 12.5,
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          {mode === "connexion"
-            ? "Première connexion en tant que professeur ? Créer mon compte"
-            : "J'ai déjà un compte, me connecter"}
-        </button>
+        <p style={{ marginTop: 16, fontSize: 12, color: COLORS.text2 }}>
+          Aucun compte ? Contacte ton professeur — les comptes sont créés par lui, il n'y a pas d'inscription libre.
+        </p>
       </div>
     </div>
   );
