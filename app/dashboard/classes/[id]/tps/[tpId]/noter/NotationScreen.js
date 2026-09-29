@@ -93,6 +93,11 @@ export default function NotationScreen({ classeId, tpId, questions, eleves, eval
           actif={mode === "eleve"}
           onClick={() => setMode("eleve")}
         />
+        <ModeButton
+          label="Vue d'ensemble"
+          actif={mode === "apercu"}
+          onClick={() => setMode("apercu")}
+        />
       </div>
 
       {mode === "question" ? (
@@ -106,7 +111,7 @@ export default function NotationScreen({ classeId, tpId, questions, eleves, eval
           sauvegarder={sauvegarder}
           marquerTousNonEvalue={marquerTousNonEvalue}
         />
-      ) : (
+      ) : mode === "eleve" ? (
         <ModeEleve
           questions={questions}
           eleves={eleves}
@@ -115,6 +120,8 @@ export default function NotationScreen({ classeId, tpId, questions, eleves, eval
           etat={etat}
           sauvegarder={sauvegarder}
         />
+      ) : (
+        <ModeApercu questions={questions} eleves={eleves} etat={etat} />
       )}
     </div>
   );
@@ -309,6 +316,110 @@ function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvega
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const STATUT_APERCU = {
+  acquis: { symbole: "✓", couleur: COLORS.green, fond: COLORS.greenBg },
+  non_acquis: { symbole: "✕", couleur: COLORS.red, fond: COLORS.redBg },
+  non_evalue: { symbole: "—", couleur: COLORS.grey, fond: COLORS.greyBg },
+};
+
+function ModeApercu({ questions, eleves, etat }) {
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 12, fontSize: 11.5, color: COLORS.text2 }}>
+        <div style={{ color: COLORS.grey }}>— Non évalué</div>
+        <div style={{ color: COLORS.red }}>✕ Non acquis</div>
+        <div style={{ color: COLORS.green }}>✓ Acquis</div>
+      </div>
+
+      <div style={{ overflowX: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 12 }}>
+        <div style={{ display: "inline-block", minWidth: "100%" }}>
+          <div style={{ display: "flex" }}>
+            <div
+              style={{
+                position: "sticky",
+                left: 0,
+                zIndex: 2,
+                width: 120,
+                flexShrink: 0,
+                padding: "10px 8px",
+                background: COLORS.accent,
+                color: "#fff",
+                fontSize: 11.5,
+                fontWeight: 700,
+              }}
+            >
+              Élève
+            </div>
+            {questions.map((q) => (
+              <div
+                key={q.id}
+                style={{
+                  width: 52,
+                  flexShrink: 0,
+                  padding: "10px 4px",
+                  background: COLORS.accent,
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textAlign: "center",
+                  borderLeft: "1px solid rgba(255,255,255,0.15)",
+                }}
+              >
+                Q{q.numero}
+              </div>
+            ))}
+          </div>
+
+          {eleves.map((eleve) => (
+            <div key={eleve.id} style={{ display: "flex", borderBottom: `1px solid ${COLORS.border}` }}>
+              <div
+                style={{
+                  position: "sticky",
+                  left: 0,
+                  zIndex: 1,
+                  width: 120,
+                  flexShrink: 0,
+                  padding: "10px 8px",
+                  background: COLORS.surface,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  borderRight: `1px solid ${COLORS.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {eleve.prenom} {eleve.nom}
+              </div>
+              {questions.map((q) => {
+                const ligne = etat[cle(q.id, eleve.id)];
+                const st = STATUT_APERCU[ligne?.statut] ?? STATUT_APERCU.non_evalue;
+                return (
+                  <div
+                    key={q.id}
+                    style={{
+                      width: 52,
+                      flexShrink: 0,
+                      padding: "10px 4px",
+                      textAlign: "center",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      background: st.fond,
+                      color: st.couleur,
+                      borderLeft: `1px solid ${COLORS.border}`,
+                    }}
+                  >
+                    {st.symbole}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
