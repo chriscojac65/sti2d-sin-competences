@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { REMEDIATION_DISPONIBLE } from "@/lib/remediation/registre";
+import { REMEDIATION_DISPONIBLE, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
 
 const COLORS = {
   bg: "#F7F5F0",
@@ -88,6 +88,18 @@ export default async function EspaceElevePage() {
   const sousCompetences = Array.from(sousCompetencesMap.entries())
     .map(([id, sc]) => ({ id, ...sc }))
     .sort((a, b) => a.code.localeCompare(b.code));
+
+  const idParCode = new Map(sousCompetences.map((sc) => [sc.code, sc.id]));
+
+  // Résout le lien "S'entraîner" d'une sous-compétence : certaines compétences
+  // sont validées par l'exercice d'une autre (ex. C5-2 par l'exercice de C5-3,
+  // voir registre.js) — le lien pointe alors vers l'id de cette dernière.
+  function lienRemediationPour(code) {
+    const codePrincipal = CODE_EXERCICE_PRINCIPAL[code];
+    if (!codePrincipal) return null;
+    const idPrincipal = idParCode.get(codePrincipal);
+    return idPrincipal ? `/dashboard/eleve/remediation/${idPrincipal}` : null;
+  }
 
   const tpDateParId = new Map();
   for (const tp of tps || []) tpDateParId.set(tp.id, tp.date);
@@ -238,10 +250,7 @@ export default async function EspaceElevePage() {
     (a.dateAncienne || "").localeCompare(b.dateAncienne || "")
   )[0];
 
-  const lienEntrainement =
-    nonAcquisChoisi && REMEDIATION_DISPONIBLE.has(nonAcquisChoisi.sc.code)
-      ? `/dashboard/eleve/remediation/${nonAcquisChoisi.sc.id}`
-      : null;
+  const lienEntrainement = nonAcquisChoisi ? lienRemediationPour(nonAcquisChoisi.sc.code) : null;
 
   const formuleNonAcquis = nonAcquisChoisi
     ? nonAcquisChoisi.absenceSeule
@@ -358,7 +367,6 @@ export default async function EspaceElevePage() {
               const valideParRemediation = remediationMap.has(sc.id);
               const absent = !valideParRemediation && pourcentage === null && aUneAbsence(sc.id);
               const nonAcquis = !valideParRemediation && (pourcentage === null || pourcentage < SEUIL_ACQUIS);
-              const remediationExiste = REMEDIATION_DISPONIBLE.has(sc.code);
               return (
                 <CompetenceBar
                   key={sc.id}
@@ -367,7 +375,7 @@ export default async function EspaceElevePage() {
                   type={baseeSurEvaluations ? "Evaluation" : "TP"}
                   absent={absent}
                   valideParRemediation={valideParRemediation}
-                  lienRemediation={nonAcquis && remediationExiste ? `/dashboard/eleve/remediation/${sc.id}` : null}
+                  lienRemediation={nonAcquis ? lienRemediationPour(sc.code) : null}
                 />
               );
             })}

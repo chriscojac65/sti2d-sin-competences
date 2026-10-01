@@ -153,7 +153,12 @@ function Presentation({ presentation }) {
   return null;
 }
 
-export default function RemediationScreen({ sousCompetence, streakInitial, valideInitial }) {
+export default function RemediationScreen({
+  sousCompetence,
+  sousCompetencesLieesIds = [],
+  streakInitial,
+  valideInitial,
+}) {
   const generateur = GENERATEURS[sousCompetence.code];
 
   const [streak, setStreak] = useState(streakInitial);
@@ -186,7 +191,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
 
     setEnAttente(true);
     const res = await enregistrerResultatRemediation({
-      sous_competence_id: sousCompetence.id,
+      sous_competence_ids: [sousCompetence.id, ...sousCompetencesLieesIds],
       reussie,
     });
     setEnAttente(false);
@@ -218,7 +223,8 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
           {sousCompetence.code} — {sousCompetence.intitule}
         </h1>
         <p style={{ fontSize: 13, color: COLORS.text2, margin: "0 0 16px" }}>
-          Réussis {OBJECTIF_STREAK} exercices d'affilée pour valider la compétence.
+          Réussis {OBJECTIF_STREAK} exercices d'affilée pour valider la compétence
+          {sousCompetencesLieesIds.length > 0 ? " (cet exercice valide aussi une compétence liée)" : ""}.
         </p>
 
         {valide ? (
