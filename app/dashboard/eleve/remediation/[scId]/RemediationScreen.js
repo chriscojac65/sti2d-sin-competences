@@ -80,7 +80,67 @@ function genererTrameSerie() {
   };
 }
 
-const LABELS_TRAME = ["Start", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "Parité", "Stop"];
+// --- Rendu du chronogramme (façon relevé d'oscilloscope) -----------------
+// Volontairement sans étiquette (pas de "Start"/"D0"/"Stop") : c'est à
+// l'élève de repérer la structure, comme sur un relevé réel. Seules les
+// divisions sont numérotées, pour qu'il puisse répondre "position n°...".
+
+const BIT_W = 34;
+const MARGE_G = 14;
+const Y_HAUT = 22;
+const Y_BAS = 56;
+
+function cheminChronogramme(trame) {
+  let d = `M ${MARGE_G} ${trame[0] === 1 ? Y_HAUT : Y_BAS} `;
+  trame.forEach((bit, i) => {
+    const x1 = MARGE_G + i * BIT_W;
+    const x2 = MARGE_G + (i + 1) * BIT_W;
+    const y = bit === 1 ? Y_HAUT : Y_BAS;
+    d += `L ${x1} ${y} L ${x2} ${y} `;
+  });
+  return d;
+}
+
+function Chronogramme({ trame }) {
+  const largeur = MARGE_G * 2 + trame.length * BIT_W;
+  const hauteur = 84;
+  return (
+    <svg width="100%" viewBox={`0 0 ${largeur} ${hauteur}`} style={{ display: "block" }}>
+      {trame.map((_, i) => (
+        <line
+          key={i}
+          x1={MARGE_G + i * BIT_W}
+          y1={10}
+          x2={MARGE_G + i * BIT_W}
+          y2={68}
+          stroke={COLORS.border}
+          strokeWidth={1}
+        />
+      ))}
+      <line
+        x1={MARGE_G + trame.length * BIT_W}
+        y1={10}
+        x2={MARGE_G + trame.length * BIT_W}
+        y2={68}
+        stroke={COLORS.border}
+        strokeWidth={1}
+      />
+      <path d={cheminChronogramme(trame)} fill="none" stroke={COLORS.accent} strokeWidth={2.5} />
+      {trame.map((_, i) => (
+        <text
+          key={i}
+          x={MARGE_G + i * BIT_W + BIT_W / 2}
+          y={hauteur - 4}
+          fontSize="9"
+          textAnchor="middle"
+          fill={COLORS.text2}
+        >
+          {i + 1}
+        </text>
+      ))}
+    </svg>
+  );
+}
 
 const GENERATEURS = {
   "C5-3": genererTrameSerie,
@@ -177,6 +237,22 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
 
         <div
           style={{
+            background: COLORS.accentBg,
+            border: `1px solid ${COLORS.accent}22`,
+            borderRadius: 10,
+            padding: "9px 12px",
+            marginBottom: 12,
+            fontSize: 11.5,
+            color: COLORS.text,
+            lineHeight: 1.4,
+          }}
+        >
+          Rappel du format : 1 bit de start, 8 bits de données D0→D7 (D0 transmis en premier), 1 bit de
+          parité paire, 1 bit de stop — soit 11 bits au total.
+        </div>
+
+        <div
+          style={{
             background: COLORS.surface,
             border: `1px solid ${COLORS.border}`,
             borderRadius: 12,
@@ -185,27 +261,10 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
           }}
         >
           <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8 }}>
-            Trame relevée à l'oscilloscope (11 bits) :
+            Relevé d'oscilloscope — trame capturée (niveau haut = 1, niveau bas = 0) :
           </div>
-          <div style={{ display: "flex", gap: 3, overflowX: "auto" }}>
-            {exercice.trame.map((bit, i) => (
-              <div key={i} style={{ flexShrink: 0, width: 38, textAlign: "center" }}>
-                <div
-                  style={{
-                    background: COLORS.accentBg,
-                    border: `1px solid ${COLORS.accent}33`,
-                    borderRadius: 6,
-                    padding: "8px 0",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: COLORS.accent,
-                  }}
-                >
-                  {bit}
-                </div>
-                <div style={{ fontSize: 9, color: COLORS.text2, marginTop: 3 }}>{LABELS_TRAME[i]}</div>
-              </div>
-            ))}
+          <div style={{ overflowX: "auto" }}>
+            <Chronogramme trame={exercice.trame} />
           </div>
         </div>
 
