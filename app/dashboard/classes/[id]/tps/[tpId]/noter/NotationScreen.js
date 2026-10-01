@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { enregistrerEvaluation, marquerNonEvalueClasse } from "./actions";
+import { enregistrerEvaluation, marquerNonEvalueClasse, marquerAbsentTP } from "./actions";
 
 const COLORS = {
   surface: "#FFFFFF",
@@ -80,6 +80,21 @@ export default function NotationScreen({ classeId, tpId, questions, eleves, eval
     await marquerNonEvalueClasse({ question_id: question.id, eleve_ids: eleveIds });
   }
 
+  async function marquerAbsent(eleve) {
+    if (!confirm(`Marquer ${eleve.prenom} ${eleve.nom} comme absent(e) pour tout ce TP ?`)) return;
+
+    const questionIds = questions.map((q) => q.id);
+    setEtat((prev) => {
+      const copie = { ...prev };
+      for (const id of questionIds) {
+        copie[cle(id, eleve.id)] = { points: 0, statut: "absent", saving: false };
+      }
+      return copie;
+    });
+
+    await marquerAbsentTP({ eleve_id: eleve.id, question_ids: questionIds });
+  }
+
   return (
     <div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
@@ -119,6 +134,7 @@ export default function NotationScreen({ classeId, tpId, questions, eleves, eval
           setEleveIndex={setEleveIndex}
           etat={etat}
           sauvegarder={sauvegarder}
+          marquerAbsent={marquerAbsent}
         />
       ) : (
         <ModeApercu questions={questions} eleves={eleves} etat={etat} />
@@ -235,8 +251,8 @@ function ModeQuestion({ questions, eleves, questionIndex, setQuestionIndex, etat
               <LigneNotation
                 question={question}
                 ligne={ligne}
-                onPoints={(points) => sauvegarder(question.id, eleve.id, { points, statut: points > 0 ? (ligne.statut === "non_evalue" ? "acquis" : ligne.statut) : ligne.statut })}
-                onStatut={(statut) => sauvegarder(question.id, eleve.id, { statut, points: statut === "non_evalue" ? 0 : ligne.points })}
+                onPoints={(points) => sauvegarder(question.id, eleve.id, { points, statut: points > 0 ? (ligne.statut === "non_evalue" || ligne.statut === "absent" ? "acquis" : ligne.statut) : ligne.statut })}
+                onStatut={(statut) => sauvegarder(question.id, eleve.id, { statut, points: statut === "non_evalue" || statut === "absent" ? 0 : ligne.points })}
               />
             </div>
           );
@@ -246,7 +262,7 @@ function ModeQuestion({ questions, eleves, questionIndex, setQuestionIndex, etat
   );
 }
 
-function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvegarder }) {
+function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvegarder, marquerAbsent }) {
   const eleve = eleves[eleveIndex];
 
   return (
@@ -273,14 +289,25 @@ function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvega
         ))}
       </div>
 
-      <div
-        style={{
-          fontSize: 15,
-          fontWeight: 700,
-          marginBottom: 12,
-        }}
-      >
-        {eleve.prenom} {eleve.nom}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>
+          {eleve.prenom} {eleve.nom}
+        </div>
+        <button
+          type="button"
+          onClick={() => marquerAbsent(eleve)}
+          style={{
+            background: "none",
+            border: `1px solid ${COLORS.border}`,
+            color: COLORS.grey,
+            borderRadius: 8,
+            padding: "6px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          Marquer absent(e) pour ce TP
+        </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -310,8 +337,8 @@ function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvega
               <LigneNotation
                 question={question}
                 ligne={ligne}
-                onPoints={(points) => sauvegarder(question.id, eleve.id, { points, statut: points > 0 ? (ligne.statut === "non_evalue" ? "acquis" : ligne.statut) : ligne.statut })}
-                onStatut={(statut) => sauvegarder(question.id, eleve.id, { statut, points: statut === "non_evalue" ? 0 : ligne.points })}
+                onPoints={(points) => sauvegarder(question.id, eleve.id, { points, statut: points > 0 ? (ligne.statut === "non_evalue" || ligne.statut === "absent" ? "acquis" : ligne.statut) : ligne.statut })}
+                onStatut={(statut) => sauvegarder(question.id, eleve.id, { statut, points: statut === "non_evalue" || statut === "absent" ? 0 : ligne.points })}
               />
             </div>
           );
@@ -321,10 +348,14 @@ function ModeEleve({ questions, eleves, eleveIndex, setEleveIndex, etat, sauvega
   );
 }
 
+const COLORS_ABSENT = "#C55A11";
+const COLORS_ABSENT_BG = "#FBEEE1";
+
 const STATUT_APERCU = {
   acquis: { symbole: "✓", couleur: COLORS.green, fond: COLORS.greenBg },
   non_acquis: { symbole: "✕", couleur: COLORS.red, fond: COLORS.redBg },
   non_evalue: { symbole: "—", couleur: COLORS.grey, fond: COLORS.greyBg },
+  absent: { symbole: "A", couleur: COLORS_ABSENT, fond: COLORS_ABSENT_BG },
 };
 
 function ModeApercu({ questions, eleves, etat }) {
@@ -334,6 +365,7 @@ function ModeApercu({ questions, eleves, etat }) {
         <div style={{ color: COLORS.grey }}>— Non évalué</div>
         <div style={{ color: COLORS.red }}>✕ Non acquis</div>
         <div style={{ color: COLORS.green }}>✓ Acquis</div>
+        <div style={{ color: COLORS_ABSENT }}>A Absent</div>
       </div>
 
       <div style={{ overflowX: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 12 }}>
@@ -426,7 +458,7 @@ function ModeApercu({ questions, eleves, etat }) {
 }
 
 function LigneNotation({ question, ligne, onPoints, onStatut }) {
-  const nonEvalue = ligne.statut === "non_evalue";
+  const nonEvalue = ligne.statut === "non_evalue" || ligne.statut === "absent";
   const valeurs = valeursPossibles(question.points_max);
 
   return (
@@ -477,10 +509,17 @@ function LigneNotation({ question, ligne, onPoints, onStatut }) {
         />
         <StatutButton
           label="Non évalué"
-          actif={nonEvalue}
+          actif={ligne.statut === "non_evalue"}
           couleurActif={COLORS.grey}
           couleurFond={COLORS.greyBg}
           onClick={() => onStatut("non_evalue")}
+        />
+        <StatutButton
+          label="Absent"
+          actif={ligne.statut === "absent"}
+          couleurActif={COLORS_ABSENT}
+          couleurFond={COLORS_ABSENT_BG}
+          onClick={() => onStatut("absent")}
         />
       </div>
     </div>

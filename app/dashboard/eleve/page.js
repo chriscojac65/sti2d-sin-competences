@@ -16,6 +16,8 @@ const COLORS = {
   redBg: "#FBEAEA",
   grey: "#8A8680",
   greyBg: "#F0EFEC",
+  orange: "#C55A11",
+  orangeBg: "#FBEEE1",
 };
 
 const SEUIL_ACQUIS = 75;
@@ -64,7 +66,9 @@ export default async function EspaceElevePage() {
 
   const evalParQuestion = new Map();
   for (const ev of evaluations || []) {
-    if (ev.statut_competence !== "non_evalue") evalParQuestion.set(ev.question_id, ev);
+    if (ev.statut_competence !== "non_evalue" && ev.statut_competence !== "absent") {
+      evalParQuestion.set(ev.question_id, ev);
+    }
   }
 
   const questionParId = new Map();
@@ -128,6 +132,15 @@ export default async function EspaceElevePage() {
     return maxPossible > 0 ? Math.round((obtenus / maxPossible) * 100) : 0;
   }
 
+  function questionsDeSc(sousCompetenceId) {
+    return Array.from(questionParId.values()).filter((q) => q.sous_competence_id === sousCompetenceId);
+  }
+
+  function aUneAbsence(sousCompetenceId) {
+    const qIds = new Set(questionsDeSc(sousCompetenceId).map((q) => q.id));
+    return (evaluations || []).some((ev) => qIds.has(ev.question_id) && ev.statut_competence === "absent");
+  }
+
   // Date la plus récente / la plus ancienne parmi les TP ayant contribué à l'évaluation
   // de cette sous-compétence (respecte le même filtre Evaluation-only que pourcentageCompetence).
   function datesEvaluation(sousCompetenceId) {
@@ -143,25 +156,45 @@ export default async function EspaceElevePage() {
     return dates;
   }
 
+  function datesAbsence(sousCompetenceId) {
+    const baseeSurEvaluations = estBaseeSurEvaluations(sousCompetenceId);
+    const dates = [];
+    for (const ev of evaluations || []) {
+      if (ev.statut_competence !== "absent") continue;
+      const q = questionParId.get(ev.question_id);
+      if (!q || q.sous_competence_id !== sousCompetenceId) continue;
+      if (baseeSurEvaluations && tpTypeParId.get(q.tp_id) !== "Evaluation") continue;
+      const d = tpDateParId.get(q.tp_id);
+      if (d) dates.push(d);
+    }
+    return dates;
+  }
+
   // Message de synthèse : une compétence maîtrisée (la plus récemment évaluée) +
-  // une compétence à consolider (la plus ancienne non acquise), parmi celles qui ont
-  // une formulation élève. Pas de volet positif forcé si rien n'est acquis.
+  // une compétence à consolider (la plus ancienne non acquise ou jamais travaillée faute
+  // de présence), parmi celles qui ont une formulation élève. Pas de volet positif forcé
+  // si rien n'est acquis. Une compétence uniquement marquée "absent" (aucune note valide
+  // ailleurs) compte comme à rattraper, avec une formulation différente.
   const candidats = sousCompetences
     .filter((sc) => sc.formulation_eleve)
     .map((sc) => {
       const pourcentage = pourcentageCompetence(sc.id);
-      const dates = datesEvaluation(sc.id);
+      const absenceSeule = pourcentage === null && aUneAbsence(sc.id);
+      const dates = absenceSeule ? datesAbsence(sc.id) : datesEvaluation(sc.id);
       return {
         sc,
         pourcentage,
+        absenceSeule,
         dateRecente: dates.length ? dates.reduce((a, b) => (b > a ? b : a)) : null,
         dateAncienne: dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null,
       };
     })
-    .filter((c) => c.pourcentage !== null);
+    .filter((c) => c.pourcentage !== null || c.absenceSeule);
 
-  const acquisCandidats = candidats.filter((c) => c.pourcentage >= SEUIL_ACQUIS);
-  const nonAcquisCandidats = candidats.filter((c) => c.pourcentage < SEUIL_ACQUIS);
+  const acquisCandidats = candidats.filter((c) => c.pourcentage !== null && c.pourcentage >= SEUIL_ACQUIS);
+  const nonAcquisCandidats = candidats.filter(
+    (c) => c.absenceSeule || (c.pourcentage !== null && c.pourcentage < SEUIL_ACQUIS)
+  );
 
   const acquisChoisi = acquisCandidats.sort((a, b) =>
     (b.dateRecente || "").localeCompare(a.dateRecente || "")
@@ -170,11 +203,17 @@ export default async function EspaceElevePage() {
     (a.dateAncienne || "").localeCompare(b.dateAncienne || "")
   )[0];
 
+  const formuleNonAcquis = nonAcquisChoisi
+    ? nonAcquisChoisi.absenceSeule
+      ? `Tu n'as pas pu travailler ${nonAcquisChoisi.sc.formulation_eleve} (absence) — à rattraper.`
+      : `Il reste à consolider ${nonAcquisChoisi.sc.formulation_eleve}.`
+    : null;
+
   let messageSynthese = null;
   if (acquisChoisi && nonAcquisChoisi) {
-    messageSynthese = `Tu maîtrises bien ${acquisChoisi.sc.formulation_eleve}. Il reste à consolider ${nonAcquisChoisi.sc.formulation_eleve}.`;
+    messageSynthese = `Tu maîtrises bien ${acquisChoisi.sc.formulation_eleve}. ${formuleNonAcquis}`;
   } else if (nonAcquisChoisi) {
-    messageSynthese = `Il reste à consolider ${nonAcquisChoisi.sc.formulation_eleve}.`;
+    messageSynthese = formuleNonAcquis;
   } else if (acquisChoisi) {
     messageSynthese = `Tu maîtrises bien ${acquisChoisi.sc.formulation_eleve}. Continue comme ça !`;
   }
@@ -259,12 +298,14 @@ export default async function EspaceElevePage() {
             {sousCompetences.map((sc) => {
               const pourcentage = pourcentageCompetence(sc.id);
               const baseeSurEvaluations = estBaseeSurEvaluations(sc.id);
+              const absent = pourcentage === null && aUneAbsence(sc.id);
               return (
                 <CompetenceBar
                   key={sc.id}
                   sc={sc}
                   pourcentage={pourcentage}
                   type={baseeSurEvaluations ? "Evaluation" : "TP"}
+                  absent={absent}
                 />
               );
             })}
@@ -313,11 +354,11 @@ function TypeBadge({ type }) {
   );
 }
 
-function CompetenceBar({ sc, pourcentage, type }) {
+function CompetenceBar({ sc, pourcentage, type, absent }) {
   const evalue = pourcentage !== null;
   const acquis = evalue && pourcentage >= SEUIL_ACQUIS;
-  const couleur = !evalue ? COLORS.grey : acquis ? COLORS.green : COLORS.red;
-  const fond = !evalue ? COLORS.greyBg : acquis ? COLORS.greenBg : COLORS.redBg;
+  const couleur = absent ? COLORS.orange : !evalue ? COLORS.grey : acquis ? COLORS.green : COLORS.red;
+  const fond = absent ? COLORS.orangeBg : !evalue ? COLORS.greyBg : acquis ? COLORS.greenBg : COLORS.redBg;
 
   return (
     <div
@@ -344,14 +385,14 @@ function CompetenceBar({ sc, pourcentage, type }) {
             whiteSpace: "nowrap",
           }}
         >
-          {evalue ? `${pourcentage}%` : "—"}
+          {absent ? "Absent" : evalue ? `${pourcentage}%` : "—"}
         </span>
       </div>
       <div style={{ height: 6, borderRadius: 4, background: COLORS.greyBg, overflow: "hidden" }}>
         <div
           style={{
             height: "100%",
-            width: `${evalue ? pourcentage : 0}%`,
+            width: `${!absent && evalue ? pourcentage : 0}%`,
             background: couleur,
             borderRadius: 4,
           }}
