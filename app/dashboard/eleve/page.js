@@ -22,6 +22,9 @@ const COLORS = {
 
 const SEUIL_ACQUIS = 75;
 
+// Sous-compétences pour lesquelles un exercice de remédiation interactif existe.
+const REMEDIATION_DISPONIBLE = new Set(["C5-3"]);
+
 async function signOut() {
   "use server";
   const supabase = createClient();
@@ -90,6 +93,16 @@ export default async function EspaceElevePage() {
 
   const tpDateParId = new Map();
   for (const tp of tps || []) tpDateParId.set(tp.id, tp.date);
+
+  const { data: remediationsValidees } = await supabase
+    .from("remediation_progres")
+    .select("sous_competence_id, date_validation")
+    .eq("eleve_id", eleve.id)
+    .eq("valide", true);
+
+  const remediationMap = new Map(
+    (remediationsValidees || []).map((r) => [r.sous_competence_id, r.date_validation])
+  );
 
   function noteTp(tp) {
     let obtenus = 0;
@@ -179,22 +192,31 @@ export default async function EspaceElevePage() {
     .filter((sc) => sc.formulation_eleve)
     .map((sc) => {
       const pourcentage = pourcentageCompetence(sc.id);
-      const absenceSeule = pourcentage === null && aUneAbsence(sc.id);
-      const dates = absenceSeule ? datesAbsence(sc.id) : datesEvaluation(sc.id);
+      const dateRemediation = remediationMap.get(sc.id) || null;
+      const valideParRemediation = !!dateRemediation;
+      const absenceSeule = !valideParRemediation && pourcentage === null && aUneAbsence(sc.id);
+      const dates = valideParRemediation
+        ? [dateRemediation]
+        : absenceSeule
+        ? datesAbsence(sc.id)
+        : datesEvaluation(sc.id);
       return {
         sc,
         pourcentage,
+        valideParRemediation,
         absenceSeule,
         estEval: estBaseeSurEvaluations(sc.id),
         dateRecente: dates.length ? dates.reduce((a, b) => (b > a ? b : a)) : null,
         dateAncienne: dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null,
       };
     })
-    .filter((c) => c.pourcentage !== null || c.absenceSeule);
+    .filter((c) => c.pourcentage !== null || c.absenceSeule || c.valideParRemediation);
 
-  const acquisCandidats = candidats.filter((c) => c.pourcentage !== null && c.pourcentage >= SEUIL_ACQUIS);
+  const acquisCandidats = candidats.filter(
+    (c) => c.valideParRemediation || (c.pourcentage !== null && c.pourcentage >= SEUIL_ACQUIS)
+  );
   const nonAcquisCandidats = candidats.filter(
-    (c) => c.absenceSeule || (c.pourcentage !== null && c.pourcentage < SEUIL_ACQUIS)
+    (c) => !c.valideParRemediation && (c.absenceSeule || (c.pourcentage !== null && c.pourcentage < SEUIL_ACQUIS))
   );
 
   // Priorité aux compétences évaluées en Évaluation (plus significatives que celles
@@ -304,7 +326,10 @@ export default async function EspaceElevePage() {
             {sousCompetences.map((sc) => {
               const pourcentage = pourcentageCompetence(sc.id);
               const baseeSurEvaluations = estBaseeSurEvaluations(sc.id);
-              const absent = pourcentage === null && aUneAbsence(sc.id);
+              const valideParRemediation = remediationMap.has(sc.id);
+              const absent = !valideParRemediation && pourcentage === null && aUneAbsence(sc.id);
+              const nonAcquis = !valideParRemediation && (pourcentage === null || pourcentage < SEUIL_ACQUIS);
+              const remediationExiste = REMEDIATION_DISPONIBLE.has(sc.code);
               return (
                 <CompetenceBar
                   key={sc.id}
@@ -312,6 +337,8 @@ export default async function EspaceElevePage() {
                   pourcentage={pourcentage}
                   type={baseeSurEvaluations ? "Evaluation" : "TP"}
                   absent={absent}
+                  valideParRemediation={valideParRemediation}
+                  lienRemediation={nonAcquis && remediationExiste ? `/dashboard/eleve/remediation/${sc.id}` : null}
                 />
               );
             })}
@@ -360,11 +387,27 @@ function TypeBadge({ type }) {
   );
 }
 
-function CompetenceBar({ sc, pourcentage, type, absent }) {
+function CompetenceBar({ sc, pourcentage, type, absent, valideParRemediation, lienRemediation }) {
   const evalue = pourcentage !== null;
-  const acquis = evalue && pourcentage >= SEUIL_ACQUIS;
-  const couleur = absent ? COLORS.orange : !evalue ? COLORS.grey : acquis ? COLORS.green : COLORS.red;
-  const fond = absent ? COLORS.orangeBg : !evalue ? COLORS.greyBg : acquis ? COLORS.greenBg : COLORS.redBg;
+  const acquis = valideParRemediation || (evalue && pourcentage >= SEUIL_ACQUIS);
+  const couleur = valideParRemediation
+    ? COLORS.green
+    : absent
+    ? COLORS.orange
+    : !evalue
+    ? COLORS.grey
+    : acquis
+    ? COLORS.green
+    : COLORS.red;
+  const fond = valideParRemediation
+    ? COLORS.greenBg
+    : absent
+    ? COLORS.orangeBg
+    : !evalue
+    ? COLORS.greyBg
+    : acquis
+    ? COLORS.greenBg
+    : COLORS.redBg;
 
   return (
     <div
@@ -391,19 +434,33 @@ function CompetenceBar({ sc, pourcentage, type, absent }) {
             whiteSpace: "nowrap",
           }}
         >
-          {absent ? "Absent" : evalue ? `${pourcentage}%` : "—"}
+          {valideParRemediation ? "Acquis (remédiation)" : absent ? "Absent" : evalue ? `${pourcentage}%` : "—"}
         </span>
       </div>
-      <div style={{ height: 6, borderRadius: 4, background: COLORS.greyBg, overflow: "hidden" }}>
+      <div style={{ height: 6, borderRadius: 4, background: COLORS.greyBg, overflow: "hidden", marginBottom: lienRemediation ? 8 : 0 }}>
         <div
           style={{
             height: "100%",
-            width: `${!absent && evalue ? pourcentage : 0}%`,
+            width: `${valideParRemediation ? 100 : !absent && evalue ? pourcentage : 0}%`,
             background: couleur,
             borderRadius: 4,
           }}
         />
       </div>
+      {lienRemediation && (
+        <Link
+          href={lienRemediation}
+          style={{
+            display: "inline-block",
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: COLORS.accent,
+            textDecoration: "none",
+          }}
+        >
+          S'entraîner →
+        </Link>
+      )}
     </div>
   );
 }
