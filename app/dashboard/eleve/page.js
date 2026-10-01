@@ -46,7 +46,9 @@ export default async function EspaceElevePage() {
 
   const { data: tps } = await supabase
     .from("tps")
-    .select("id, nom, date, type, questions(id, points_max, sous_competence_id, sous_competences(code, intitule))")
+    .select(
+      "id, nom, date, type, questions(id, points_max, sous_competence_id, sous_competences(code, intitule, formulation_eleve))"
+    )
     .eq("classe_id", eleve.classe_id)
     .order("date", { ascending: true, nullsFirst: false });
 
@@ -81,6 +83,9 @@ export default async function EspaceElevePage() {
   const sousCompetences = Array.from(sousCompetencesMap.entries())
     .map(([id, sc]) => ({ id, ...sc }))
     .sort((a, b) => a.code.localeCompare(b.code));
+
+  const tpDateParId = new Map();
+  for (const tp of tps || []) tpDateParId.set(tp.id, tp.date);
 
   function noteTp(tp) {
     let obtenus = 0;
@@ -123,15 +128,83 @@ export default async function EspaceElevePage() {
     return maxPossible > 0 ? Math.round((obtenus / maxPossible) * 100) : 0;
   }
 
+  // Date la plus récente / la plus ancienne parmi les TP ayant contribué à l'évaluation
+  // de cette sous-compétence (respecte le même filtre Evaluation-only que pourcentageCompetence).
+  function datesEvaluation(sousCompetenceId) {
+    const baseeSurEvaluations = estBaseeSurEvaluations(sousCompetenceId);
+    const dates = [];
+    for (const [questionId] of evalParQuestion.entries()) {
+      const q = questionParId.get(questionId);
+      if (!q || q.sous_competence_id !== sousCompetenceId) continue;
+      if (baseeSurEvaluations && tpTypeParId.get(q.tp_id) !== "Evaluation") continue;
+      const d = tpDateParId.get(q.tp_id);
+      if (d) dates.push(d);
+    }
+    return dates;
+  }
+
+  // Message de synthèse : une compétence maîtrisée (la plus récemment évaluée) +
+  // une compétence à consolider (la plus ancienne non acquise), parmi celles qui ont
+  // une formulation élève. Pas de volet positif forcé si rien n'est acquis.
+  const candidats = sousCompetences
+    .filter((sc) => sc.formulation_eleve)
+    .map((sc) => {
+      const pourcentage = pourcentageCompetence(sc.id);
+      const dates = datesEvaluation(sc.id);
+      return {
+        sc,
+        pourcentage,
+        dateRecente: dates.length ? dates.reduce((a, b) => (b > a ? b : a)) : null,
+        dateAncienne: dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null,
+      };
+    })
+    .filter((c) => c.pourcentage !== null);
+
+  const acquisCandidats = candidats.filter((c) => c.pourcentage >= SEUIL_ACQUIS);
+  const nonAcquisCandidats = candidats.filter((c) => c.pourcentage < SEUIL_ACQUIS);
+
+  const acquisChoisi = acquisCandidats.sort((a, b) =>
+    (b.dateRecente || "").localeCompare(a.dateRecente || "")
+  )[0];
+  const nonAcquisChoisi = nonAcquisCandidats.sort((a, b) =>
+    (a.dateAncienne || "").localeCompare(b.dateAncienne || "")
+  )[0];
+
+  let messageSynthese = null;
+  if (acquisChoisi && nonAcquisChoisi) {
+    messageSynthese = `Tu maîtrises bien ${acquisChoisi.sc.formulation_eleve}. Il reste à consolider ${nonAcquisChoisi.sc.formulation_eleve}.`;
+  } else if (nonAcquisChoisi) {
+    messageSynthese = `Il reste à consolider ${nonAcquisChoisi.sc.formulation_eleve}.`;
+  } else if (acquisChoisi) {
+    messageSynthese = `Tu maîtrises bien ${acquisChoisi.sc.formulation_eleve}. Continue comme ça !`;
+  }
+
   return (
     <div style={{ minHeight: "100vh", padding: "24px 16px 48px" }}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
         <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 4 }}>
           {eleve.classes?.nom}
         </div>
-        <h1 style={{ fontSize: 21, fontWeight: 700, margin: "0 0 20px" }}>
+        <h1 style={{ fontSize: 21, fontWeight: 700, margin: "0 0 10px" }}>
           Bonjour, {eleve.prenom}
         </h1>
+
+        {messageSynthese && (
+          <div
+            style={{
+              background: COLORS.accentBg,
+              border: `1px solid ${COLORS.accent}22`,
+              borderRadius: 12,
+              padding: "12px 14px",
+              marginBottom: 20,
+              fontSize: 13.5,
+              lineHeight: 1.45,
+              color: COLORS.text,
+            }}
+          >
+            {messageSynthese}
+          </div>
+        )}
 
         <h2 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 10px", color: COLORS.text }}>
           Mes TP
