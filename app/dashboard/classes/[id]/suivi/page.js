@@ -7,6 +7,31 @@ import { createClient } from "@/lib/supabase/server";
 // qu'on ne le lui dit pas explicitement, ce qui affichait des totaux périmés.
 export const dynamic = "force-dynamic";
 
+// Supabase plafonne chaque requête à 1000 lignes par défaut. Cette page charge
+// TOUTES les évaluations de la classe en une fois (actuellement >1000 pour une
+// classe chargée), donc une requête simple en perdait une partie en silence,
+// sans erreur — d'où des totaux faux et imprévisibles. On pagine par blocs de
+// 1000 jusqu'à tout récupérer, quelle que soit la taille future des données.
+async function recupererToutesLesLignes(supabase, table, colonnes, filtreIn) {
+  const TAILLE_PAGE = 1000;
+  let toutes = [];
+  let page = 0;
+  while (true) {
+    const depart = page * TAILLE_PAGE;
+    const fin = depart + TAILLE_PAGE - 1;
+    const { data, error } = await supabase
+      .from(table)
+      .select(colonnes)
+      .in(filtreIn.colonne, filtreIn.valeurs)
+      .range(depart, fin);
+    if (error) throw error;
+    toutes = toutes.concat(data || []);
+    if (!data || data.length < TAILLE_PAGE) break;
+    page++;
+  }
+  return toutes;
+}
+
 const COLORS = {
   surface: "#FFFFFF",
   text: "#1C1B1A",
@@ -58,12 +83,14 @@ export default async function SuiviPage({ params }) {
 
   const allQuestionIds = (tps || []).flatMap((tp) => (tp.questions || []).map((q) => q.id));
 
-  const { data: evaluations } = allQuestionIds.length
-    ? await supabase
-        .from("evaluations")
-        .select("question_id, eleve_id, points_obtenus, statut_competence, date_saisie")
-        .in("question_id", allQuestionIds)
-    : { data: [] };
+  const evaluations = allQuestionIds.length
+    ? await recupererToutesLesLignes(
+        supabase,
+        "evaluations",
+        "question_id, eleve_id, points_obtenus, statut_competence, date_saisie",
+        { colonne: "question_id", valeurs: allQuestionIds }
+      )
+    : [];
 
   const questionParId = new Map();
   const tpTypeParId = new Map();
