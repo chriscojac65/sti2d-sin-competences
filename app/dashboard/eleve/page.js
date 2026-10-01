@@ -219,10 +219,19 @@ export default async function EspaceElevePage() {
     (c) => !c.valideParRemediation && (c.absenceSeule || (c.pourcentage !== null && c.pourcentage < SEUIL_ACQUIS))
   );
 
-  // Priorité aux compétences évaluées en Évaluation (plus significatives que celles
-  // évaluées en TP) ; on ne retombe sur les TP que s'il n'y a aucune Évaluation disponible.
+  // Priorité de sélection, du plus au moins prioritaire :
+  // 1. une compétence non acquise pour laquelle un exercice de remédiation existe
+  //    (c'est elle qu'on veut pousser, puisque l'élève peut agir dessus immédiatement) ;
+  // 2. à défaut, une compétence évaluée en Évaluation (plus significative qu'un TP) ;
+  // 3. à défaut, n'importe quelle compétence non acquise.
+  // Dans chaque niveau, on retient la plus ancienne non travaillée.
+  const nonAcquisAvecRemediation = nonAcquisCandidats.filter((c) => REMEDIATION_DISPONIBLE.has(c.sc.code));
   const nonAcquisEval = nonAcquisCandidats.filter((c) => c.estEval);
-  const nonAcquisPool = nonAcquisEval.length ? nonAcquisEval : nonAcquisCandidats;
+  const nonAcquisPool = nonAcquisAvecRemediation.length
+    ? nonAcquisAvecRemediation
+    : nonAcquisEval.length
+    ? nonAcquisEval
+    : nonAcquisCandidats;
 
   const acquisChoisi = acquisCandidats.sort((a, b) =>
     (b.dateRecente || "").localeCompare(a.dateRecente || "")
@@ -230,6 +239,11 @@ export default async function EspaceElevePage() {
   const nonAcquisChoisi = nonAcquisPool.sort((a, b) =>
     (a.dateAncienne || "").localeCompare(b.dateAncienne || "")
   )[0];
+
+  const lienEntrainement =
+    nonAcquisChoisi && REMEDIATION_DISPONIBLE.has(nonAcquisChoisi.sc.code)
+      ? `/dashboard/eleve/remediation/${nonAcquisChoisi.sc.id}`
+      : null;
 
   const formuleNonAcquis = nonAcquisChoisi
     ? nonAcquisChoisi.absenceSeule
@@ -262,14 +276,31 @@ export default async function EspaceElevePage() {
               background: COLORS.accentBg,
               border: `1px solid ${COLORS.accent}22`,
               borderRadius: 12,
-              padding: "12px 14px",
+              padding: "14px",
               marginBottom: 20,
-              fontSize: 13.5,
-              lineHeight: 1.45,
-              color: COLORS.text,
             }}
           >
-            {messageSynthese}
+            <div style={{ fontSize: 13.5, lineHeight: 1.45, color: COLORS.text, marginBottom: lienEntrainement ? 10 : 0 }}>
+              {messageSynthese}
+            </div>
+            {lienEntrainement && (
+              <Link
+                href={lienEntrainement}
+                style={{
+                  display: "block",
+                  textAlign: "center",
+                  background: COLORS.accent,
+                  color: "#fff",
+                  borderRadius: 10,
+                  padding: "11px 0",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                }}
+              >
+                S'entraîner maintenant →
+              </Link>
+            )}
           </div>
         )}
 
