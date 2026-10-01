@@ -185,6 +185,7 @@ export default async function EspaceElevePage() {
         sc,
         pourcentage,
         absenceSeule,
+        estEval: estBaseeSurEvaluations(sc.id),
         dateRecente: dates.length ? dates.reduce((a, b) => (b > a ? b : a)) : null,
         dateAncienne: dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null,
       };
@@ -196,10 +197,15 @@ export default async function EspaceElevePage() {
     (c) => c.absenceSeule || (c.pourcentage !== null && c.pourcentage < SEUIL_ACQUIS)
   );
 
+  // Priorité aux compétences évaluées en Évaluation (plus significatives que celles
+  // évaluées en TP) ; on ne retombe sur les TP que s'il n'y a aucune Évaluation disponible.
+  const nonAcquisEval = nonAcquisCandidats.filter((c) => c.estEval);
+  const nonAcquisPool = nonAcquisEval.length ? nonAcquisEval : nonAcquisCandidats;
+
   const acquisChoisi = acquisCandidats.sort((a, b) =>
     (b.dateRecente || "").localeCompare(a.dateRecente || "")
   )[0];
-  const nonAcquisChoisi = nonAcquisCandidats.sort((a, b) =>
+  const nonAcquisChoisi = nonAcquisPool.sort((a, b) =>
     (a.dateAncienne || "").localeCompare(b.dateAncienne || "")
   )[0];
 
