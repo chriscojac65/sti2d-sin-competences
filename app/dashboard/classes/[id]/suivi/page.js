@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+// Sans ça, Next.js met en cache les requêtes Supabase indéfiniment (par défaut
+// en Next 14) : une note saisie ailleurs ne rafraîchit jamais cette page tant
+// qu'on ne le lui dit pas explicitement, ce qui affichait des totaux périmés.
+export const dynamic = "force-dynamic";
+
 const COLORS = {
   surface: "#FFFFFF",
   text: "#1C1B1A",
@@ -83,8 +88,13 @@ export default async function SuiviPage({ params }) {
 
   function noteEleveTp(eleveId, tp) {
     const questionsTp = tp.questions || [];
+    // Le dénominateur est toujours le barème réel du TP (comme dans la vue élève),
+    // pas seulement la somme des questions déjà notées : sinon un TP partiellement
+    // noté affiche un total qui varie d'un élève à l'autre (ex. "14/17" au lieu de
+    // "14/20"), ce qui est trompeur dans un tableau censé comparer tout le monde
+    // sur le même barème.
+    const maxPossible = questionsTp.reduce((s, q) => s + Number(q.points_max), 0);
     let obtenus = 0;
-    let maxPossible = 0;
     let nbNotees = 0;
 
     for (const q of questionsTp) {
@@ -93,7 +103,6 @@ export default async function SuiviPage({ params }) {
       );
       if (evalu) {
         obtenus += Number(evalu.points_obtenus);
-        maxPossible += Number(q.points_max);
         nbNotees++;
       }
     }

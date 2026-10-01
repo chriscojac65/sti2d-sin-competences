@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import NotationScreen from "./NotationScreen";
 
+export const dynamic = "force-dynamic";
+
 const COLORS = {
   text2: "#6B6862",
   accent: "#33506B",

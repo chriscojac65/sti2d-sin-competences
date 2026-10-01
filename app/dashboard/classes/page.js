@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import NouvelleClasseForm from "./NouvelleClasseForm";
 
+export const dynamic = "force-dynamic";
+
 const COLORS = {
   surface: "#FFFFFF",
   text: "#1C1B1A",

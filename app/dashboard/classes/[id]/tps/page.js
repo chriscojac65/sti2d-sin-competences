@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ImportTpForm from "./ImportTpForm";
 
+export const dynamic = "force-dynamic";
+
 const COLORS = {
   surface: "#FFFFFF",
   text: "#1C1B1A",

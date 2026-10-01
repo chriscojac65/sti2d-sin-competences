@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { REMEDIATION_DISPONIBLE, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
 
+// Évite que Next.js serve une version en cache des requêtes Supabase : sans
+// ça, une note ou une remédiation récente peut ne pas apparaître tout de
+// suite selon le dernier moment où cette page a été rechargée "à froid".
+export const dynamic = "force-dynamic";
+
 const COLORS = {
   bg: "#F7F5F0",
   surface: "#FFFFFF",

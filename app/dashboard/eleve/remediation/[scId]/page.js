@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { COMPETENCES_LIEES } from "@/lib/remediation/registre";
 import RemediationScreen from "./RemediationScreen";
 
+export const dynamic = "force-dynamic";
+
 export default async function RemediationPage({ params }) {
   const supabase = createClient();
   const {
