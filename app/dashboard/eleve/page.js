@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { REMEDIATION_DISPONIBLE } from "@/lib/remediation/registre";
 
 const COLORS = {
   bg: "#F7F5F0",
@@ -21,9 +22,6 @@ const COLORS = {
 };
 
 const SEUIL_ACQUIS = 75;
-
-// Sous-compétences pour lesquelles un exercice de remédiation interactif existe.
-const REMEDIATION_DISPONIBLE = new Set(["C5-3"]);
 
 async function signOut() {
   "use server";
