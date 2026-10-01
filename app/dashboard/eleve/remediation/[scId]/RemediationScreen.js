@@ -19,6 +19,8 @@ const COLORS = {
   redBg: "#FBEAEA",
   grey: "#8A8680",
   greyBg: "#F0EFEC",
+  orange: "#C55A11",
+  orangeBg: "#FBEEE1",
 };
 
 const OBJECTIF_STREAK = 3;
@@ -85,14 +87,80 @@ function Chronogramme({ trame }) {
   );
 }
 
+// --- Rendu de la présentation de l'exercice -------------------------------
+// "chronogramme" : un relevé de signal (trame série). "texte" : un énoncé
+// textuel (ex. circuit électrique) — l'élève doit alors faire le schéma
+// lui-même sur papier, d'où le rappel explicite ci-dessous.
+
+function Presentation({ presentation }) {
+  if (presentation.kind === "chronogramme") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8 }}>
+          Relevé d'oscilloscope — trame capturée (niveau haut = 1, niveau bas = 0) :
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <Chronogramme trame={presentation.trame} />
+        </div>
+      </div>
+    );
+  }
+
+  if (presentation.kind === "texte") {
+    return (
+      <>
+        <div
+          style={{
+            background: COLORS.orangeBg,
+            border: `1px solid ${COLORS.orange}44`,
+            borderRadius: 10,
+            padding: "10px 12px",
+            marginBottom: 12,
+            fontSize: 12.5,
+            color: COLORS.orange,
+            fontWeight: 600,
+            lineHeight: 1.4,
+          }}
+        >
+          ⚠️ Fais le schéma de ce circuit sur une feuille avant de répondre — c'est indispensable
+          pour bien repérer le(s) nœud(s) et la (les) maille(s).
+        </div>
+        <div
+          style={{
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 12,
+            padding: "14px",
+            marginBottom: 16,
+            fontSize: 13.5,
+            lineHeight: 1.5,
+          }}
+        >
+          {presentation.enonce}
+        </div>
+      </>
+    );
+  }
+
+  return null;
+}
+
 export default function RemediationScreen({ sousCompetence, streakInitial, valideInitial }) {
   const generateur = GENERATEURS[sousCompetence.code];
 
   const [streak, setStreak] = useState(streakInitial);
   const [valide, setValide] = useState(valideInitial);
   const [exercice, setExercice] = useState(() => (generateur ? generateur() : null));
-  const [reponses, setReponses] = useState({ q1: null, q2: null, q3: null });
-  const [resultat, setResultat] = useState(null); // null | { reussie, detail }
+  const [reponses, setReponses] = useState(() => (generateur ? new Array(exercice.questions.length).fill(null) : []));
+  const [resultat, setResultat] = useState(null); // null | { reussie }
   const [enAttente, setEnAttente] = useState(false);
 
   if (!generateur) {
@@ -114,10 +182,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
   }
 
   async function valider() {
-    const reussie =
-      reponses.q1 === exercice.bonnesReponses.octetBinaire &&
-      reponses.q2 === exercice.bonnesReponses.octetHex &&
-      reponses.q3 === exercice.bonnesReponses.lettre;
+    const reussie = exercice.questions.every((q, i) => reponses[i] === q.correcte);
 
     setEnAttente(true);
     const res = await enregistrerResultatRemediation({
@@ -133,13 +198,14 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
     setResultat({ reussie });
   }
 
-  function trameSuivante() {
-    setExercice(generateur());
-    setReponses({ q1: null, q2: null, q3: null });
+  function exerciceSuivant() {
+    const nouveau = generateur();
+    setExercice(nouveau);
+    setReponses(new Array(nouveau.questions.length).fill(null));
     setResultat(null);
   }
 
-  const toutRepondu = reponses.q1 && reponses.q2 && reponses.q3;
+  const toutRepondu = reponses.every((r) => r !== null);
 
   return (
     <div style={{ minHeight: "100vh", padding: "24px 16px 48px" }}>
@@ -152,7 +218,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
           {sousCompetence.code} — {sousCompetence.intitule}
         </h1>
         <p style={{ fontSize: 13, color: COLORS.text2, margin: "0 0 16px" }}>
-          Décode la trame ci-dessous. Réussis {OBJECTIF_STREAK} trames d'affilée pour valider la compétence.
+          Réussis {OBJECTIF_STREAK} exercices d'affilée pour valider la compétence.
         </p>
 
         {valide ? (
@@ -174,66 +240,26 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
           <StreakBar streak={streak} objectif={OBJECTIF_STREAK} />
         )}
 
-        <div
-          style={{
-            background: COLORS.accentBg,
-            border: `1px solid ${COLORS.accent}22`,
-            borderRadius: 10,
-            padding: "9px 12px",
-            marginBottom: 12,
-            fontSize: 11.5,
-            color: COLORS.text,
-            lineHeight: 1.4,
-          }}
-        >
-          Rappel du format : 1 bit de start, 8 bits de données D0→D7 (D0 transmis en premier), 1 bit de
-          parité paire, 1 bit de stop — soit 11 bits au total.
-        </div>
+        <Presentation presentation={exercice.presentation} />
 
-        <div
-          style={{
-            background: COLORS.surface,
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: 12,
-            padding: "14px",
-            marginBottom: 16,
-          }}
-        >
-          <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8 }}>
-            Relevé d'oscilloscope — trame capturée (niveau haut = 1, niveau bas = 0) :
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <Chronogramme trame={exercice.trame} />
-          </div>
-        </div>
-
-        <QuestionQCM
-          label="Octet transmis (binaire, ordre normal D7→D0)"
-          options={exercice.optionsQ1}
-          valeur={reponses.q1}
-          onChange={(v) => setReponses((r) => ({ ...r, q1: v }))}
-          desactive={!!resultat}
-          correcte={exercice.bonnesReponses.octetBinaire}
-          afficherCorrection={!!resultat}
-        />
-        <QuestionQCM
-          label="Code hexadécimal"
-          options={exercice.optionsQ2}
-          valeur={reponses.q2}
-          onChange={(v) => setReponses((r) => ({ ...r, q2: v }))}
-          desactive={!!resultat}
-          correcte={exercice.bonnesReponses.octetHex}
-          afficherCorrection={!!resultat}
-        />
-        <QuestionQCM
-          label="Caractère ASCII correspondant"
-          options={exercice.optionsQ3}
-          valeur={reponses.q3}
-          onChange={(v) => setReponses((r) => ({ ...r, q3: v }))}
-          desactive={!!resultat}
-          correcte={exercice.bonnesReponses.lettre}
-          afficherCorrection={!!resultat}
-        />
+        {exercice.questions.map((q, i) => (
+          <QuestionQCM
+            key={i}
+            label={q.label}
+            options={q.options}
+            valeur={reponses[i]}
+            onChange={(v) =>
+              setReponses((r) => {
+                const copie = [...r];
+                copie[i] = v;
+                return copie;
+              })
+            }
+            desactive={!!resultat}
+            correcte={q.correcte}
+            afficherCorrection={!!resultat}
+          />
+        ))}
 
         {resultat && (
           <div
@@ -249,7 +275,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
             }}
           >
             {resultat.reussie
-              ? "Bien joué, trame correcte !"
+              ? "Bien joué, exercice correct !"
               : "Pas tout à fait — la série repart à zéro. Les bonnes réponses sont surlignées ci-dessus."}
           </div>
         )}
@@ -276,7 +302,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
         ) : (
           <button
             type="button"
-            onClick={trameSuivante}
+            onClick={exerciceSuivant}
             style={{
               width: "100%",
               background: COLORS.accent,
@@ -289,7 +315,7 @@ export default function RemediationScreen({ sousCompetence, streakInitial, valid
               cursor: "pointer",
             }}
           >
-            Trame suivante
+            Exercice suivant
           </button>
         )}
       </div>
