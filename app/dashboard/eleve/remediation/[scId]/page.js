@@ -21,23 +21,29 @@ export default async function RemediationPage({ params }) {
 
   const { data: sc } = await supabase
     .from("sous_competences")
-    .select("id, code, intitule, formulation_eleve, competences(referentiel_id)")
+    .select("id, code, intitule, formulation_eleve, competences(referentiel_id, referentiels(nom))")
     .eq("id", params.scId)
     .maybeSingle();
   if (!sc) redirect("/dashboard/eleve");
+
+  // Les codes de sous-compétence ne sont uniques qu'au sein d'un référentiel
+  // (voir registre.js) : toute recherche dans COMPETENCES_LIEES doit donc être
+  // scopée par le référentiel réel de cette sous-compétence.
+  const referentielId = sc.competences?.referentiel_id || null;
+  const referentielNom = sc.competences?.referentiels?.nom || null;
 
   // Compétences liées : démontrées par le même exercice (voir registre.js).
   // On les résout dans le même référentiel que la compétence principale,
   // pour ne pas risquer de valider une sous-compétence d'une autre classe
   // qui porterait le même code.
-  const codesLies = COMPETENCES_LIEES[sc.code] || [];
+  const codesLies = (COMPETENCES_LIEES[referentielNom] || {})[sc.code] || [];
   let sousCompetencesLiees = [];
   if (codesLies.length > 0) {
     const { data: liees } = await supabase
       .from("sous_competences")
       .select("id, code, competences!inner(referentiel_id)")
       .in("code", codesLies)
-      .eq("competences.referentiel_id", sc.competences?.referentiel_id);
+      .eq("competences.referentiel_id", referentielId);
     sousCompetencesLiees = liees || [];
   }
 
@@ -51,6 +57,7 @@ export default async function RemediationPage({ params }) {
   return (
     <RemediationScreen
       sousCompetence={sc}
+      referentielNom={referentielNom}
       sousCompetencesLieesIds={sousCompetencesLiees.map((s) => s.id)}
       streakInitial={progres?.streak_actuel ?? 0}
       valideInitial={progres?.valide ?? false}

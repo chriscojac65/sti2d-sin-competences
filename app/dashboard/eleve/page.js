@@ -44,13 +44,23 @@ export default async function EspaceElevePage() {
 
   const { data: eleve } = await supabase
     .from("eleves")
-    .select("id, nom, prenom, classe_id, classes(nom)")
+    .select("id, nom, prenom, classe_id, classes(nom, referentiels(nom))")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
   if (!eleve) {
     redirect("/dashboard");
   }
+
+  // Les codes de sous-compétence ne sont uniques qu'au sein d'un référentiel
+  // (STI2D SIN et BTS CRSA réutilisent par exemple tous les deux "C5-3" pour
+  // des compétences différentes) : on résout donc le référentiel de l'élève
+  // une fois ici, et on l'utilise pour toute recherche dans le registre de
+  // remédiation plus bas, pour ne jamais proposer l'exercice d'un autre
+  // référentiel par coïncidence de code.
+  const referentielNom = eleve.classes?.referentiels?.nom || null;
+  const remediationDisponible = REMEDIATION_DISPONIBLE[referentielNom] || new Set();
+  const codeExercicePrincipal = CODE_EXERCICE_PRINCIPAL[referentielNom] || {};
 
   const { data: tps } = await supabase
     .from("tps")
@@ -100,7 +110,7 @@ export default async function EspaceElevePage() {
   // sont validées par l'exercice d'une autre (ex. C5-2 par l'exercice de C5-3,
   // voir registre.js) — le lien pointe alors vers l'id de cette dernière.
   function lienRemediationPour(code) {
-    const codePrincipal = CODE_EXERCICE_PRINCIPAL[code];
+    const codePrincipal = codeExercicePrincipal[code];
     if (!codePrincipal) return null;
     const idPrincipal = idParCode.get(codePrincipal);
     return idPrincipal ? `/dashboard/eleve/remediation/${idPrincipal}` : null;
@@ -240,7 +250,7 @@ export default async function EspaceElevePage() {
   // 2. à défaut, une compétence évaluée en Évaluation (plus significative qu'un TP) ;
   // 3. à défaut, n'importe quelle compétence non acquise.
   // Dans chaque niveau, on retient la plus ancienne non travaillée.
-  const nonAcquisAvecRemediation = nonAcquisCandidats.filter((c) => REMEDIATION_DISPONIBLE.has(c.sc.code));
+  const nonAcquisAvecRemediation = nonAcquisCandidats.filter((c) => remediationDisponible.has(c.sc.code));
   const nonAcquisEval = nonAcquisCandidats.filter((c) => c.estEval);
   const nonAcquisPool = nonAcquisAvecRemediation.length
     ? nonAcquisAvecRemediation

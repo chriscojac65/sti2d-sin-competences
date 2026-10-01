@@ -89,8 +89,9 @@ function Chronogramme({ trame }) {
 
 // --- Rendu de la présentation de l'exercice -------------------------------
 // "chronogramme" : un relevé de signal (trame série). "texte" : un énoncé
-// textuel (ex. circuit électrique) — l'élève doit alors faire le schéma
-// lui-même sur papier, d'où le rappel explicite ci-dessous.
+// textuel (cahier des charges, circuit électrique...) — si l'exercice le
+// demande (ex. faire un schéma sur papier), presentation.avertissement
+// porte le rappel à afficher ; sinon aucun bandeau n'apparaît.
 
 function Presentation({ presentation }) {
   if (presentation.kind === "chronogramme") {
@@ -117,22 +118,23 @@ function Presentation({ presentation }) {
   if (presentation.kind === "texte") {
     return (
       <>
-        <div
-          style={{
-            background: COLORS.orangeBg,
-            border: `1px solid ${COLORS.orange}44`,
-            borderRadius: 10,
-            padding: "10px 12px",
-            marginBottom: 12,
-            fontSize: 12.5,
-            color: COLORS.orange,
-            fontWeight: 600,
-            lineHeight: 1.4,
-          }}
-        >
-          ⚠️ Fais le schéma de ce circuit sur une feuille avant de répondre — c'est indispensable
-          pour bien repérer le(s) nœud(s) et la (les) maille(s).
-        </div>
+        {presentation.avertissement && (
+          <div
+            style={{
+              background: COLORS.orangeBg,
+              border: `1px solid ${COLORS.orange}44`,
+              borderRadius: 10,
+              padding: "10px 12px",
+              marginBottom: 12,
+              fontSize: 12.5,
+              color: COLORS.orange,
+              fontWeight: 600,
+              lineHeight: 1.4,
+            }}
+          >
+            {presentation.avertissement}
+          </div>
+        )}
         <div
           style={{
             background: COLORS.surface,
@@ -155,11 +157,15 @@ function Presentation({ presentation }) {
 
 export default function RemediationScreen({
   sousCompetence,
+  referentielNom,
   sousCompetencesLieesIds = [],
   streakInitial,
   valideInitial,
 }) {
-  const generateur = GENERATEURS[sousCompetence.code];
+  // Les codes de sous-compétence ne sont uniques qu'au sein d'un référentiel
+  // (voir registre.js) : on ne va donc chercher le générateur que dans celui
+  // de cette sous-compétence, jamais par le seul code.
+  const generateur = (GENERATEURS[referentielNom] || {})[sousCompetence.code];
 
   const [streak, setStreak] = useState(streakInitial);
   const [valide, setValide] = useState(valideInitial);
