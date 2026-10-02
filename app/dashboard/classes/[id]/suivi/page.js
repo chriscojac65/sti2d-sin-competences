@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { REMEDIATION_DISPONIBLE } from "@/lib/remediation/registre";
 
 // Sans ça, Next.js met en cache les requêtes Supabase indéfiniment (par défaut
 // en Next 14) : une note saisie ailleurs ne rafraîchit jamais cette page tant
@@ -63,10 +64,17 @@ export default async function SuiviPage({ params }) {
 
   const { data: classe } = await supabase
     .from("classes")
-    .select("id, nom")
+    .select("id, nom, referentiels(nom)")
     .eq("id", params.id)
     .maybeSingle();
   if (!classe) notFound();
+
+  // Codes de sous-compétence pour lesquels un exercice de remédiation existe
+  // dans CE référentiel (les codes ne sont uniques qu'au sein d'un
+  // référentiel, voir registre.js) : sert à savoir quelles lignes de la
+  // légende rendre cliquables, plus bas.
+  const referentielNom = classe.referentiels?.nom || null;
+  const codesAvecRemediation = REMEDIATION_DISPONIBLE[referentielNom] || new Set();
 
   const [{ data: eleves }, { data: tps }] = await Promise.all([
     supabase
@@ -358,16 +366,63 @@ export default async function SuiviPage({ params }) {
             {sousCompetences.length > 0 && (
               <div style={{ marginTop: 20 }}>
                 <h2 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 8px" }}>Légende des compétences</h2>
+                <p style={{ fontSize: 11.5, color: COLORS.text2, margin: "0 0 8px" }}>
+                  Les compétences surlignées ont un exercice de remédiation : clique dessus pour l'essayer
+                  toi-même (rien n'est enregistré).
+                </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {sousCompetences.map((sc) => (
-                    <div
-                      key={sc.id}
-                      style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: COLORS.text2 }}
-                    >
-                      <span style={{ color: COLORS.accent, fontWeight: 700 }}>{sc.code}</span> — {sc.intitule}
-                      <TypeBadge type={estBaseeSurEvaluations(sc.id) ? "Evaluation" : "TP"} />
-                    </div>
-                  ))}
+                  {sousCompetences.map((sc) => {
+                    const aUneRemediation = codesAvecRemediation.has(sc.code);
+                    const contenu = (
+                      <>
+                        <span style={{ color: COLORS.accent, fontWeight: 700 }}>{sc.code}</span> — {sc.intitule}
+                        <TypeBadge type={estBaseeSurEvaluations(sc.id) ? "Evaluation" : "TP"} />
+                        {aUneRemediation && (
+                          <span style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600 }}>
+                            → s'entraîner
+                          </span>
+                        )}
+                      </>
+                    );
+
+                    if (!aUneRemediation) {
+                      return (
+                        <div
+                          key={sc.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 12.5,
+                            color: COLORS.text2,
+                            padding: "4px 6px",
+                          }}
+                        >
+                          {contenu}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={sc.id}
+                        href={`/dashboard/remediation-test/${sc.id}?classeId=${classe.id}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 12.5,
+                          color: COLORS.text2,
+                          textDecoration: "none",
+                          background: COLORS.accentBg,
+                          borderRadius: 8,
+                          padding: "4px 6px",
+                        }}
+                      >
+                        {contenu}
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             )}
