@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { GENERATEURS } from "@/lib/remediation/registre";
 
 export const dynamic = "force-dynamic";
 
 const COLORS = {
+  bg: "#F7F5F0",
   surface: "#FFFFFF",
   text: "#1C1B1A",
   text2: "#6B6862",
@@ -13,86 +13,106 @@ const COLORS = {
   accent: "#33506B",
 };
 
-export default async function RemediationTestPage() {
+async function signOut() {
+  "use server";
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
+export default async function DashboardPage() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+
+  if (!user) {
+    redirect("/login");
+  }
 
   const { data: prof } = await supabase
     .from("profs")
-    .select("id")
+    .select("nom")
     .eq("auth_user_id", user.id)
     .maybeSingle();
-  if (!prof) redirect("/dashboard");
 
-  const { data: sousCompetences } = await supabase
-    .from("sous_competences")
-    .select("id, code, intitule, competences(referentiel_id, referentiels(nom))");
-
-  // On ne garde, pour chaque référentiel, que les compétences pour
-  // lesquelles un générateur existe dans le registre (voir registre.js) —
-  // même logique que côté élève, pour ne jamais lister un exercice qui
-  // n'existe pas encore.
-  const parReferentiel = {};
-  for (const referentielNom of Object.keys(GENERATEURS)) {
-    const codesDisponibles = new Set(Object.keys(GENERATEURS[referentielNom]));
-    parReferentiel[referentielNom] = (sousCompetences || [])
-      .filter(
-        (sc) =>
-          sc.competences?.referentiels?.nom === referentielNom && codesDisponibles.has(sc.code)
-      )
-      .sort((a, b) => a.code.localeCompare(b.code));
+  if (!prof) {
+    const { data: eleve } = await supabase
+      .from("eleves")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    if (eleve) {
+      redirect("/dashboard/eleve");
+    }
   }
 
   return (
     <div style={{ minHeight: "100vh", padding: "32px 24px" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ marginBottom: 16 }}>
-          <Link href="/dashboard" style={{ fontSize: 12.5, color: COLORS.accent }}>
-            ← Dashboard
-          </Link>
-        </div>
+      <div
+        style={{
+          maxWidth: 640,
+          margin: "0 auto",
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 16,
+          padding: "28px 32px",
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2 }}>Terminale STI2D SIN</div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Tester une remédiation</h1>
-        <p style={{ fontSize: 13, color: COLORS.text2, margin: "0 0 24px" }}>
-          Aperçu des exercices tels que les élèves les voient. Rien n'est enregistré en base, ni pour
-          toi ni pour un élève.
-        </p>
+        {prof ? (
+          <>
+            <h1 style={{ fontSize: 21, fontWeight: 700, margin: "6px 0 4px" }}>
+              Bonjour, {prof.nom}
+            </h1>
+            <p style={{ fontSize: 13.5, color: COLORS.text2, margin: "0 0 20px" }}>
+              Connecté en tant que professeur — {user.email}
+            </p>
+            <Link
+              href="/dashboard/classes"
+              style={{
+                display: "inline-block",
+                background: COLORS.accent,
+                color: "#fff",
+                borderRadius: 10,
+                padding: "10px 18px",
+                fontWeight: 600,
+                fontSize: 13.5,
+                textDecoration: "none",
+              }}
+            >
+              Mes classes →
+            </Link>
+          </>
+        ) : (
+          <>
+            <h1 style={{ fontSize: 21, fontWeight: 700, margin: "6px 0 4px" }}>
+              Compte non activé
+            </h1>
+            <p style={{ fontSize: 13.5, color: COLORS.text2, lineHeight: 1.6 }}>
+              Ton compte ({user.email}) existe mais n'est pas encore relié à un compte
+              professeur. Contacte l'administrateur pour l'activer.
+            </p>
+          </>
+        )}
 
-        {Object.entries(parReferentiel).map(([referentielNom, liste]) => (
-          <div key={referentielNom} style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 10px" }}>{referentielNom}</h2>
-            {liste.length === 0 ? (
-              <p style={{ fontSize: 13, color: COLORS.text2 }}>
-                Aucun exercice disponible pour ce référentiel pour l'instant.
-              </p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {liste.map((sc) => (
-                  <Link
-                    key={sc.id}
-                    href={`/dashboard/remediation-test/${sc.id}`}
-                    style={{
-                      display: "block",
-                      padding: "12px 14px",
-                      borderRadius: 10,
-                      border: `1px solid ${COLORS.border}`,
-                      background: COLORS.surface,
-                      textDecoration: "none",
-                      color: COLORS.text,
-                      fontSize: 13.5,
-                    }}
-                  >
-                    <span style={{ fontWeight: 700, color: COLORS.accent }}>{sc.code}</span> —{" "}
-                    {sc.intitule}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+        <form action={signOut} style={{ marginTop: 24 }}>
+          <button
+            type="submit"
+            style={{
+              background: "none",
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              borderRadius: 8,
+              padding: "9px 16px",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Se déconnecter
+          </button>
+        </form>
       </div>
     </div>
   );
