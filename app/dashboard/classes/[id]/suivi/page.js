@@ -92,6 +92,38 @@ export default async function SuiviPage({ params }) {
       )
     : [];
 
+  // Connexions des élèves (alimentées par un trigger côté base, à chaque
+  // connexion réelle — voir la table connexions_eleves) : on en tire, pour
+  // chaque élève, le nombre total de connexions et la date de la dernière.
+  const eleveIds = (eleves || []).map((e) => e.id);
+  const connexions = eleveIds.length
+    ? await recupererToutesLesLignes(supabase, "connexions_eleves", "eleve_id, connecte_le", {
+        colonne: "eleve_id",
+        valeurs: eleveIds,
+      })
+    : [];
+
+  const statsConnexionParEleve = new Map();
+  for (const c of connexions) {
+    const actuel = statsConnexionParEleve.get(c.eleve_id) || { nombre: 0, derniere: null };
+    actuel.nombre += 1;
+    if (!actuel.derniere || new Date(c.connecte_le) > new Date(actuel.derniere)) {
+      actuel.derniere = c.connecte_le;
+    }
+    statsConnexionParEleve.set(c.eleve_id, actuel);
+  }
+
+  function formatTempsDepuis(dateStr) {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return "à l'instant";
+    if (minutes < 60) return `il y a ${minutes} min`;
+    const heures = Math.floor(minutes / 60);
+    if (heures < 24) return `il y a ${heures} h`;
+    const jours = Math.floor(heures / 24);
+    return `il y a ${jours} j`;
+  }
+
   const questionParId = new Map();
   const tpTypeParId = new Map();
   for (const tp of tps || []) {
@@ -269,10 +301,20 @@ export default async function SuiviPage({ params }) {
                           borderBottom: `1px solid ${COLORS.border}`,
                           borderRight: `1px solid ${COLORS.border}`,
                           whiteSpace: "nowrap",
-                          fontWeight: 600,
                         }}
                       >
-                        {eleve.prenom} {eleve.nom}
+                        <div style={{ fontWeight: 600 }}>
+                          {eleve.prenom} {eleve.nom}
+                        </div>
+                        <div style={{ fontSize: 10.5, fontWeight: 500, color: COLORS.text2, marginTop: 1 }}>
+                          {(() => {
+                            const stats = statsConnexionParEleve.get(eleve.id);
+                            if (!stats) return "jamais connecté";
+                            return `${stats.nombre} connexion${stats.nombre > 1 ? "s" : ""} · ${formatTempsDepuis(
+                              stats.derniere
+                            )}`;
+                          })()}
+                        </div>
                       </td>
                       {(tps || []).map((tp) => {
                         const note = noteEleveTp(eleve.id, tp);
