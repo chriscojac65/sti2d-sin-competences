@@ -87,13 +87,189 @@ function Chronogramme({ trame }) {
   );
 }
 
+// --- Rendu du logigramme (symboles normalisés : "&" = ET, "≥1" = OU,
+// "1" + bulle en sortie = NON) ---------------------------------------------
+// Deux topologies : "A" (3 entrées, 2 portes en cascade) et "B" (4 entrées,
+// 2 portes en parallèle puis une 3e qui combine leurs sorties). Une seule
+// entrée peut être inversée (porte NON) avant d'entrer dans sa porte.
+
+function GateBox({ x, y, w, h, type }) {
+  const symbole = type === "ET" ? "&" : "≥1";
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={COLORS.surface} stroke={COLORS.text} strokeWidth={1.5} />
+      <text x={x + w / 2} y={y + h / 2 + 6} fontSize="18" fontWeight="700" textAnchor="middle">
+        {symbole}
+      </text>
+    </g>
+  );
+}
+
+function PorteNON({ x, y }) {
+  const w = 24;
+  const h = 14;
+  return (
+    <g>
+      <rect x={x} y={y - h / 2} width={w} height={h} fill={COLORS.surface} stroke={COLORS.text} strokeWidth={1.1} />
+      <text x={x + w / 2} y={y + 4} fontSize="10" fontWeight="700" textAnchor="middle">
+        1
+      </text>
+      <circle cx={x + w + 3} cy={y} r={2.6} fill={COLORS.surface} stroke={COLORS.text} strokeWidth={1.1} />
+    </g>
+  );
+}
+
+// Ligne horizontale entre deux abscisses à une ordonnée donnée, avec
+// éventuellement une porte NON insérée au milieu.
+function LigneHorizontale({ y, xDebut, xFin, inversee }) {
+  if (!inversee) {
+    return <line x1={xDebut} y1={y} x2={xFin} y2={y} stroke={COLORS.text} strokeWidth={1.3} />;
+  }
+  const milieu = xDebut + (xFin - xDebut) / 2 - 13;
+  return (
+    <>
+      <line x1={xDebut} y1={y} x2={milieu} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+      <PorteNON x={milieu} y={y} />
+      <line x1={milieu + 32} y1={y} x2={xFin} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+    </>
+  );
+}
+
+function LogigrammeA({ entrees, inversion, gate1, gate2 }) {
+  const Y_A = 28;
+  const Y_B = 68;
+  const Y_C = 132;
+  const G1_X = 100;
+  const G1_W = 56;
+  const G1_TOP = 10;
+  const G1_H = 76; // centre : 48
+  const G1_OUT_Y = G1_TOP + G1_H / 2;
+  const G2_X = 220;
+  const G2_W = 56;
+  const G2_TOP = 30;
+  const G2_H = 90; // centre : 75
+  const G2_PORT_HAUT = G1_OUT_Y; // aligné avec la sortie de la porte 1
+  const G2_PORT_BAS = 102; // C remonte jusque là
+  const G2_OUT_Y = G2_TOP + G2_H / 2;
+  const S_X = 330;
+
+  return (
+    <svg width="100%" viewBox="0 0 360 160" style={{ display: "block" }}>
+      <LigneHorizontale y={Y_A} xDebut={0} xFin={G1_X} inversee={inversion === "A"} />
+      <text x={2} y={Y_A - 8} fontSize="11" fontWeight="700" fill={COLORS.accent}>A</text>
+
+      <LigneHorizontale y={Y_B} xDebut={0} xFin={G1_X} inversee={inversion === "B"} />
+      <text x={2} y={Y_B - 8} fontSize="11" fontWeight="700" fill={COLORS.accent}>B</text>
+
+      <GateBox x={G1_X} y={G1_TOP} w={G1_W} h={G1_H} type={gate1} />
+
+      <line x1={G1_X + G1_W} y1={G1_OUT_Y} x2={G2_X} y2={G2_PORT_HAUT} stroke={COLORS.text} strokeWidth={1.3} />
+
+      <path
+        d={`M 170 ${Y_C} V ${G2_PORT_BAS} H ${G2_X}`}
+        fill="none"
+        stroke={COLORS.text}
+        strokeWidth={1.3}
+      />
+      <LigneHorizontale y={Y_C} xDebut={0} xFin={170} inversee={inversion === "C"} />
+      <text x={2} y={Y_C - 8} fontSize="11" fontWeight="700" fill={COLORS.accent}>C</text>
+
+      <GateBox x={G2_X} y={G2_TOP} w={G2_W} h={G2_H} type={gate2} />
+
+      <line x1={G2_X + G2_W} y1={G2_OUT_Y} x2={S_X} y2={G2_OUT_Y} stroke={COLORS.text} strokeWidth={1.3} />
+      <text x={S_X + 4} y={G2_OUT_Y + 4} fontSize="12" fontWeight="700">S</text>
+    </svg>
+  );
+}
+
+function LogigrammeB({ entrees, inversion, gate1, gate2, gate3 }) {
+  const Y_A = 22;
+  const Y_B = 62;
+  const Y_C = 102;
+  const Y_D = 142;
+  const G1_X = 100;
+  const G1_W = 56;
+  const G1_TOP = 8;
+  const G1_H = 70; // centre : 43
+  const G1_OUT_Y = G1_TOP + G1_H / 2;
+  const G2_X = 100;
+  const G2_W = 56;
+  const G2_TOP = 88;
+  const G2_H = 70; // centre : 123
+  const G2_OUT_Y = G2_TOP + G2_H / 2;
+  const G3_X = 220;
+  const G3_W = 56;
+  const G3_TOP = 30;
+  const G3_H = 106; // centre : 83, aligné sur aucune des deux entrées (coudes absorbés par la hauteur)
+  const G3_OUT_Y = G3_TOP + G3_H / 2;
+  const S_X = 330;
+
+  return (
+    <svg width="100%" viewBox="0 0 360 190" style={{ display: "block" }}>
+      <LigneHorizontale y={Y_A} xDebut={0} xFin={G1_X} inversee={inversion === "A"} />
+      <text x={2} y={Y_A - 7} fontSize="11" fontWeight="700" fill={COLORS.accent}>A</text>
+
+      <LigneHorizontale y={Y_B} xDebut={0} xFin={G1_X} inversee={inversion === "B"} />
+      <text x={2} y={Y_B - 7} fontSize="11" fontWeight="700" fill={COLORS.accent}>B</text>
+
+      <GateBox x={G1_X} y={G1_TOP} w={G1_W} h={G1_H} type={gate1} />
+
+      <LigneHorizontale y={Y_C} xDebut={0} xFin={G2_X} inversee={inversion === "C"} />
+      <text x={2} y={Y_C - 7} fontSize="11" fontWeight="700" fill={COLORS.accent}>C</text>
+
+      <LigneHorizontale y={Y_D} xDebut={0} xFin={G2_X} inversee={inversion === "D"} />
+      <text x={2} y={Y_D - 7} fontSize="11" fontWeight="700" fill={COLORS.accent}>D</text>
+
+      <GateBox x={G2_X} y={G2_TOP} w={G2_W} h={G2_H} type={gate2} />
+
+      <line x1={G1_X + G1_W} y1={G1_OUT_Y} x2={G3_X} y2={G1_OUT_Y} stroke={COLORS.text} strokeWidth={1.3} />
+      <line x1={G2_X + G2_W} y1={G2_OUT_Y} x2={G3_X} y2={G2_OUT_Y} stroke={COLORS.text} strokeWidth={1.3} />
+
+      <GateBox x={G3_X} y={G3_TOP} w={G3_W} h={G3_H} type={gate3} />
+
+      <line x1={G3_X + G3_W} y1={G3_OUT_Y} x2={S_X} y2={G3_OUT_Y} stroke={COLORS.text} strokeWidth={1.3} />
+      <text x={S_X + 4} y={G3_OUT_Y + 4} fontSize="12" fontWeight="700">S</text>
+    </svg>
+  );
+}
+
+function Logigramme({ presentation }) {
+  return presentation.topologie === "A" ? (
+    <LogigrammeA {...presentation} />
+  ) : (
+    <LogigrammeB {...presentation} />
+  );
+}
+
 // --- Rendu de la présentation de l'exercice -------------------------------
-// "chronogramme" : un relevé de signal (trame série). "texte" : un énoncé
-// textuel (cahier des charges, circuit électrique...) — si l'exercice le
-// demande (ex. faire un schéma sur papier), presentation.avertissement
-// porte le rappel à afficher ; sinon aucun bandeau n'apparaît.
+// "chronogramme" : un relevé de signal (trame série). "logigramme" : un
+// schéma à base de portes ET/OU/NON. "texte" : un énoncé textuel (cahier
+// des charges, circuit électrique...) — si l'exercice le demande (ex. faire
+// un schéma sur papier), presentation.avertissement porte le rappel à
+// afficher ; sinon aucun bandeau n'apparaît.
 
 function Presentation({ presentation }) {
+  if (presentation.kind === "logigramme") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8 }}>
+          Logigramme — retrouve l'équation booléenne correspondante :
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <Logigramme presentation={presentation} />
+        </div>
+      </div>
+    );
+  }
+
   if (presentation.kind === "chronogramme") {
     return (
       <div
