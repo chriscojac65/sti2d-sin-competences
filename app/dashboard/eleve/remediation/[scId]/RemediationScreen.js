@@ -337,6 +337,14 @@ export default function RemediationScreen({
   sousCompetencesLieesIds = [],
   streakInitial,
   valideInitial,
+  // Mode test (prof) : rien n'est enregistré en base — le streak reste
+  // purement local le temps de la session, pour vérifier l'enchaînement
+  // sans jamais toucher à remediation_progres ni à la progression d'un
+  // élève. retourHref/retourLabel permettent de renvoyer vers la bonne
+  // page selon qui regarde (élève ou prof).
+  modeTest = false,
+  retourHref = "/dashboard/eleve",
+  retourLabel = "Retour à mes compétences",
 }) {
   // Les codes de sous-compétence ne sont uniques qu'au sein d'un référentiel
   // (voir registre.js) : on ne va donc chercher le générateur que dans celui
@@ -354,7 +362,7 @@ export default function RemediationScreen({
     return (
       <div style={{ minHeight: "100vh", padding: "24px 16px 48px" }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <Link href="/dashboard/eleve" style={{ fontSize: 12, color: COLORS.accent }}>
+          <Link href={retourHref} style={{ fontSize: 12, color: COLORS.accent }}>
             &larr; Retour
           </Link>
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: "12px 0" }}>
@@ -370,6 +378,15 @@ export default function RemediationScreen({
 
   async function valider() {
     const reussie = exercice.questions.every((q, i) => reponses[i] === q.correcte);
+
+    if (modeTest) {
+      // Rien n'est écrit en base : le streak ne vit que dans cet écran.
+      const nouveauStreak = reussie ? streak + 1 : 0;
+      setStreak(nouveauStreak);
+      setValide(nouveauStreak >= OBJECTIF_STREAK);
+      setResultat({ reussie });
+      return;
+    }
 
     setEnAttente(true);
     const res = await enregistrerResultatRemediation({
@@ -397,8 +414,8 @@ export default function RemediationScreen({
   return (
     <div style={{ minHeight: "100vh", padding: "24px 16px 48px" }}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
-        <Link href="/dashboard/eleve" style={{ fontSize: 12, color: COLORS.accent }}>
-          &larr; Retour à mes compétences
+        <Link href={retourHref} style={{ fontSize: 12, color: COLORS.accent }}>
+          &larr; {retourLabel}
         </Link>
 
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: "12px 0 4px" }}>
@@ -408,6 +425,23 @@ export default function RemediationScreen({
           Réussis {OBJECTIF_STREAK} exercices d'affilée pour valider la compétence
           {sousCompetencesLieesIds.length > 0 ? " (cet exercice valide aussi une compétence liée)" : ""}.
         </p>
+
+        {modeTest && (
+          <div
+            style={{
+              background: COLORS.orangeBg,
+              border: `1px solid ${COLORS.orange}44`,
+              borderRadius: 10,
+              padding: "8px 12px",
+              marginBottom: 16,
+              fontSize: 12,
+              color: COLORS.orange,
+              fontWeight: 600,
+            }}
+          >
+            Mode test — rien n'est enregistré, ni pour toi ni pour un élève.
+          </div>
+        )}
 
         {valide ? (
           <div
