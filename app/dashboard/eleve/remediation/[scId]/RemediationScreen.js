@@ -241,14 +241,102 @@ function Logigramme({ presentation }) {
   );
 }
 
+// --- Rendu du schéma à contacts (contacts NO/NF, bobine) ------------------
+// Plusieurs branches horizontales en parallèle, chacune avec ses contacts
+// en série, toutes reliées à la même bobine "S" : la forme standard
+// "somme de produits" des schémas à contacts. Un contact NF (normalement
+// fermé, = négation) se dessine avec une barre oblique sur le symbole.
+
+function Contact({ x, y, label, inverse }) {
+  return (
+    <g>
+      <line x1={x} y1={y} x2={x + 10} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+      <line x1={x + 10} y1={y - 5} x2={x + 10} y2={y + 5} stroke={COLORS.text} strokeWidth={1.3} />
+      <line x1={x + 22} y1={y - 5} x2={x + 22} y2={y + 5} stroke={COLORS.text} strokeWidth={1.3} />
+      {inverse && (
+        <line x1={x + 9} y1={y + 6} x2={x + 23} y2={y - 6} stroke={COLORS.text} strokeWidth={1.3} />
+      )}
+      <line x1={x + 22} y1={y} x2={x + 32} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+      <text x={x + 16} y={y - 9} fontSize="11" fontWeight="700" textAnchor="middle">
+        {inverse ? `/${label}` : label}
+      </text>
+    </g>
+  );
+}
+
+function SchemaContacts({ branches }) {
+  const CONTACT_W = 54;
+  const ROW_H = 42;
+  const RAIL_X = 14;
+  const START_X = 34;
+  const maxContacts = Math.max(...branches.map((b) => b.length));
+  const railDroiteX = START_X + maxContacts * CONTACT_W + 10;
+  const coilX = railDroiteX + 40;
+  const largeur = coilX + 60;
+  const yHaut = 20;
+  const yBas = 20 + (branches.length - 1) * ROW_H;
+  const yMid = (yHaut + yBas) / 2;
+  const hauteur = yBas + 20;
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${largeur} ${hauteur}`} style={{ display: "block" }}>
+      <line x1={RAIL_X} y1={yHaut} x2={RAIL_X} y2={yBas} stroke={COLORS.text} strokeWidth={1.5} />
+      <line x1={railDroiteX} y1={yHaut} x2={railDroiteX} y2={yBas} stroke={COLORS.text} strokeWidth={1.5} />
+      <line x1={railDroiteX} y1={yMid} x2={coilX - 14} y2={yMid} stroke={COLORS.text} strokeWidth={1.5} />
+      <circle cx={coilX} cy={yMid} r={14} fill="none" stroke={COLORS.text} strokeWidth={1.5} />
+      <line x1={coilX - 7} y1={yMid - 7} x2={coilX + 7} y2={yMid + 7} stroke={COLORS.text} strokeWidth={1.3} />
+      <line x1={coilX - 7} y1={yMid + 7} x2={coilX + 7} y2={yMid - 7} stroke={COLORS.text} strokeWidth={1.3} />
+      <text x={coilX + 22} y={yMid + 4} fontSize="12" fontWeight="700">
+        S
+      </text>
+
+      {branches.map((branche, i) => {
+        const y = yHaut + i * ROW_H;
+        const finDerniereContact = START_X + (branche.length - 1) * CONTACT_W + 32;
+        return (
+          <g key={i}>
+            <line x1={RAIL_X} y1={y} x2={START_X} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+            {branche.map((contact, j) => (
+              <Contact key={j} x={START_X + j * CONTACT_W} y={y} label={contact.lettre} inverse={contact.inv} />
+            ))}
+            <line x1={finDerniereContact} y1={y} x2={railDroiteX} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // --- Rendu de la présentation de l'exercice -------------------------------
 // "chronogramme" : un relevé de signal (trame série). "logigramme" : un
-// schéma à base de portes ET/OU/NON. "texte" : un énoncé textuel (cahier
-// des charges, circuit électrique...) — si l'exercice le demande (ex. faire
-// un schéma sur papier), presentation.avertissement porte le rappel à
+// schéma à base de portes ET/OU/NON. "schema-contacts" : un schéma à
+// contacts (NO/NF) et bobine. "texte" : un énoncé textuel (cahier des
+// charges, circuit électrique...) — si l'exercice le demande (ex. faire un
+// schéma sur papier), presentation.avertissement porte le rappel à
 // afficher ; sinon aucun bandeau n'apparaît.
 
 function Presentation({ presentation }) {
+  if (presentation.kind === "schema-contacts") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8 }}>
+          Schéma à contacts — retrouve l'équation booléenne correspondante :
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <SchemaContacts branches={presentation.branches} />
+        </div>
+      </div>
+    );
+  }
+
   if (presentation.kind === "logigramme") {
     return (
       <div

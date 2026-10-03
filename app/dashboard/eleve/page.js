@@ -381,7 +381,6 @@ export default async function EspaceElevePage() {
               const baseeSurEvaluations = estBaseeSurEvaluations(sc.id);
               const valideParRemediation = remediationMap.has(sc.id);
               const absent = !valideParRemediation && pourcentage === null && aUneAbsence(sc.id);
-              const nonAcquis = !valideParRemediation && (pourcentage === null || pourcentage < SEUIL_ACQUIS);
               return (
                 <CompetenceBar
                   key={sc.id}
@@ -390,7 +389,10 @@ export default async function EspaceElevePage() {
                   type={baseeSurEvaluations ? "Evaluation" : "TP"}
                   absent={absent}
                   valideParRemediation={valideParRemediation}
-                  lienRemediation={nonAcquis ? lienRemediationPour(sc.code) : null}
+                  // Le lien d'entraînement est proposé pour toute compétence qui a un
+                  // exercice, acquise ou non — CompetenceBar le met plus ou moins en
+                  // avant selon que la compétence reste à travailler ou pas.
+                  lienRemediation={lienRemediationPour(sc.code)}
                 />
               );
             })}
@@ -499,20 +501,36 @@ function CompetenceBar({ sc, pourcentage, type, absent, valideParRemediation, li
           }}
         />
       </div>
-      {lienRemediation && (
-        <Link
-          href={lienRemediation}
-          style={{
-            display: "inline-block",
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: COLORS.accent,
-            textDecoration: "none",
-          }}
-        >
-          S'entraîner →
-        </Link>
-      )}
+      {lienRemediation &&
+        (acquis ? (
+          // Compétence déjà acquise : le lien reste accessible mais discret, pour ne
+          // pas rivaliser visuellement avec ce qu'il reste vraiment à travailler.
+          <Link
+            href={lienRemediation}
+            style={{
+              display: "inline-block",
+              fontSize: 11,
+              fontWeight: 500,
+              color: COLORS.text2,
+              textDecoration: "none",
+            }}
+          >
+            Revoir / s'entraîner →
+          </Link>
+        ) : (
+          <Link
+            href={lienRemediation}
+            style={{
+              display: "inline-block",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: COLORS.accent,
+              textDecoration: "none",
+            }}
+          >
+            S'entraîner →
+          </Link>
+        ))}
     </div>
   );
 }
