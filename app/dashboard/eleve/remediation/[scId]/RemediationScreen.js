@@ -87,6 +87,88 @@ function Chronogramme({ trame }) {
   );
 }
 
+// --- Rendu des chronogrammes à plusieurs signaux (C1-7) -------------------
+// Un chronogramme "logique" compact, sans ligne de base type oscilloscope :
+// une seule ligne horizontale par signal, qui monte/descend à chaque front.
+// Utilisé à la fois pour les signaux d'entrée (A, B, C, affichés avec leur
+// nom) et pour chaque proposition de réponse dans le QCM (juste le tracé de
+// S, sans nom, pour ne pas donner d'indice par la mise en forme).
+
+const SIGNAL_BIT_W = 28;
+const SIGNAL_MARGE_G = 10;
+const SIGNAL_Y_HAUT = 6;
+const SIGNAL_Y_BAS = 24;
+
+function cheminSignal(trame) {
+  let d = `M ${SIGNAL_MARGE_G} ${trame[0] === 1 ? SIGNAL_Y_HAUT : SIGNAL_Y_BAS} `;
+  trame.forEach((bit, i) => {
+    const x1 = SIGNAL_MARGE_G + i * SIGNAL_BIT_W;
+    const x2 = SIGNAL_MARGE_G + (i + 1) * SIGNAL_BIT_W;
+    const y = bit === 1 ? SIGNAL_Y_HAUT : SIGNAL_Y_BAS;
+    d += `L ${x1} ${y} L ${x2} ${y} `;
+  });
+  return d;
+}
+
+// Un seul tracé de signal, avec un repère vertical sur chaque division pour
+// pouvoir aligner plusieurs signaux les uns sous les autres.
+function SignalLogique({ trame, nom, couleur, avecDivisions }) {
+  const largeur = SIGNAL_MARGE_G * 2 + trame.length * SIGNAL_BIT_W;
+  const hauteur = 30;
+  return (
+    <svg width="100%" viewBox={`0 0 ${largeur} ${hauteur}`} style={{ display: "block" }}>
+      {avecDivisions &&
+        trame.map((_, i) => (
+          <line
+            key={i}
+            x1={SIGNAL_MARGE_G + i * SIGNAL_BIT_W}
+            y1={0}
+            x2={SIGNAL_MARGE_G + i * SIGNAL_BIT_W}
+            y2={hauteur}
+            stroke={COLORS.border}
+            strokeWidth={1}
+          />
+        ))}
+      {avecDivisions && (
+        <line
+          x1={SIGNAL_MARGE_G + trame.length * SIGNAL_BIT_W}
+          y1={0}
+          x2={SIGNAL_MARGE_G + trame.length * SIGNAL_BIT_W}
+          y2={hauteur}
+          stroke={COLORS.border}
+          strokeWidth={1}
+        />
+      )}
+      <path d={cheminSignal(trame)} fill="none" stroke={couleur || COLORS.accent} strokeWidth={2.5} />
+      {nom && (
+        <text x={0} y={hauteur / 2 + 4} fontSize="11" fontWeight="700" fill={COLORS.text}>
+          {nom}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+// Les signaux d'entrée (A, B, C...), empilés avec leur nom en marge gauche.
+function ChronogrammeEntrees({ entrees, trames }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 18 }}>
+      {entrees.map((nom) => (
+        <div key={nom} style={{ position: "relative" }}>
+          <div style={{ position: "absolute", left: -18, top: 4, fontSize: 11, fontWeight: 700 }}>{nom}</div>
+          <SignalLogique trame={trames[nom]} couleur={COLORS.text2} avecDivisions />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Un tracé de S compact, sans nom ni divisions — utilisé comme bouton de
+// réponse dans le QCM graphique (voir QuestionQCMChronogramme).
+function MiniChronogrammeOption({ trame }) {
+  return <SignalLogique trame={trame} couleur="currentColor" avecDivisions={false} />;
+}
+
 // --- Rendu du logigramme (symboles normalisés : "&" = ET, "≥1" = OU,
 // "1" + bulle en sortie = NON) ---------------------------------------------
 // Deux topologies : "A" (3 entrées, 2 portes en cascade) et "B" (4 entrées,
@@ -405,6 +487,38 @@ function Presentation({ presentation }) {
     );
   }
 
+  if (presentation.kind === "chronogramme-logique") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 2 }}>
+          Équation à appliquer aux signaux d'entrée :
+        </div>
+        <div
+          style={{
+            fontFamily: "monospace",
+            fontSize: 14,
+            fontWeight: 700,
+            color: COLORS.accent,
+            marginBottom: 12,
+          }}
+        >
+          {presentation.equation}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <ChronogrammeEntrees entrees={presentation.entrees} trames={presentation.trames} />
+        </div>
+      </div>
+    );
+  }
+
   if (presentation.kind === "texte") {
     return (
       <>
@@ -578,24 +692,27 @@ export default function RemediationScreen({
 
         <Presentation presentation={exercice.presentation} />
 
-        {exercice.questions.map((q, i) => (
-          <QuestionQCM
-            key={i}
-            label={q.label}
-            options={q.options}
-            valeur={reponses[i]}
-            onChange={(v) =>
-              setReponses((r) => {
-                const copie = [...r];
-                copie[i] = v;
-                return copie;
-              })
-            }
-            desactive={!!resultat}
-            correcte={q.correcte}
-            afficherCorrection={!!resultat}
-          />
-        ))}
+        {exercice.questions.map((q, i) => {
+          const QuestionComposant = q.rendu === "chronogramme" ? QuestionQCMChronogramme : QuestionQCM;
+          return (
+            <QuestionComposant
+              key={i}
+              label={q.label}
+              options={q.options}
+              valeur={reponses[i]}
+              onChange={(v) =>
+                setReponses((r) => {
+                  const copie = [...r];
+                  copie[i] = v;
+                  return copie;
+                })
+              }
+              desactive={!!resultat}
+              correcte={q.correcte}
+              afficherCorrection={!!resultat}
+            />
+          );
+        })}
 
         {resultat && (
           <div
@@ -673,6 +790,66 @@ function StreakBar({ streak, objectif }) {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+// Variante graphique du QCM (C1-7) : chaque option est un chronogramme
+// (une trame encodée en chaîne "1,0,0,1,...") au lieu d'un texte. Même
+// logique de sélection/correction que QuestionQCM — seul le rendu du
+// bouton change : le tracé SVG utilise stroke="currentColor", donc il
+// prend automatiquement la couleur de texte du bouton (vert/rouge/accent).
+function QuestionQCMChronogramme({ label, options, valeur, onChange, desactive, correcte, afficherCorrection }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {options.map((opt) => {
+          const selectionne = valeur === opt;
+          const estCorrecte = afficherCorrection && opt === correcte;
+          const estMauvaiseSelection = afficherCorrection && selectionne && opt !== correcte;
+          const trame = opt.split(",").map(Number);
+          return (
+            <button
+              key={opt}
+              type="button"
+              disabled={desactive}
+              onClick={() => onChange(opt)}
+              style={{
+                textAlign: "left",
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: estCorrecte
+                  ? COLORS.greenBg
+                  : estMauvaiseSelection
+                  ? COLORS.redBg
+                  : selectionne
+                  ? COLORS.accentBg
+                  : COLORS.surface,
+                color: estCorrecte
+                  ? COLORS.green
+                  : estMauvaiseSelection
+                  ? COLORS.red
+                  : selectionne
+                  ? COLORS.accent
+                  : COLORS.text,
+                border: `1px solid ${
+                  estCorrecte
+                    ? COLORS.green
+                    : estMauvaiseSelection
+                    ? COLORS.red
+                    : selectionne
+                    ? COLORS.accent
+                    : COLORS.border
+                }`,
+                cursor: desactive ? "default" : "pointer",
+              }}
+            >
+              <MiniChronogrammeOption trame={trame} />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
