@@ -247,6 +247,12 @@ function Logigramme({ presentation }) {
 // "somme de produits" des schémas à contacts. Un contact NF (normalement
 // fermé, = négation) se dessine avec une barre oblique sur le symbole.
 
+// Largeur occupée par le symbole d'un contact lui-même (hors espacement
+// avec le contact suivant) : tout ce qui dépasse CONTACT_SYMBOLE_W doit être
+// comblé par un connecteur explicite, sinon il manque un bout de fil entre
+// deux contacts en série.
+const CONTACT_SYMBOLE_W = 32;
+
 function Contact({ x, y, label, inverse }) {
   return (
     <g>
@@ -256,9 +262,11 @@ function Contact({ x, y, label, inverse }) {
       {inverse && (
         <line x1={x + 9} y1={y + 6} x2={x + 23} y2={y - 6} stroke={COLORS.text} strokeWidth={1.3} />
       )}
-      <line x1={x + 22} y1={y} x2={x + 32} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+      <line x1={x + 22} y1={y} x2={x + CONTACT_SYMBOLE_W} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
+      {/* Le nom reste le même, NO ou NF : à l'élève de repérer un contact NF
+          au symbole (la barre oblique), pas à une étiquette qui le trahirait. */}
       <text x={x + 16} y={y - 9} fontSize="11" fontWeight="700" textAnchor="middle">
-        {inverse ? `/${label}` : label}
+        {label}
       </text>
     </g>
   );
@@ -292,13 +300,31 @@ function SchemaContacts({ branches }) {
 
       {branches.map((branche, i) => {
         const y = yHaut + i * ROW_H;
-        const finDerniereContact = START_X + (branche.length - 1) * CONTACT_W + 32;
+        const finDerniereContact = START_X + (branche.length - 1) * CONTACT_W + CONTACT_SYMBOLE_W;
         return (
           <g key={i}>
             <line x1={RAIL_X} y1={y} x2={START_X} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
-            {branche.map((contact, j) => (
-              <Contact key={j} x={START_X + j * CONTACT_W} y={y} label={contact.lettre} inverse={contact.inv} />
-            ))}
+            {branche.map((contact, j) => {
+              const x = START_X + j * CONTACT_W;
+              return (
+                <g key={j}>
+                  <Contact x={x} y={y} label={contact.lettre} inverse={contact.inv} />
+                  {/* Connecteur vers le contact suivant de la même branche —
+                      sans lui, il manquait un segment de fil entre deux
+                      contacts en série. */}
+                  {j < branche.length - 1 && (
+                    <line
+                      x1={x + CONTACT_SYMBOLE_W}
+                      y1={y}
+                      x2={x + CONTACT_W}
+                      y2={y}
+                      stroke={COLORS.text}
+                      strokeWidth={1.3}
+                    />
+                  )}
+                </g>
+              );
+            })}
             <line x1={finDerniereContact} y1={y} x2={railDroiteX} y2={y} stroke={COLORS.text} strokeWidth={1.3} />
           </g>
         );
