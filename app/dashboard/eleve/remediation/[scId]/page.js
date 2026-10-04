@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { COMPETENCES_LIEES } from "@/lib/remediation/registre";
+import { COMPETENCES_LIEES, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
 import RemediationScreen from "./RemediationScreen";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +33,19 @@ export default async function RemediationPage({ params }) {
   const referentielNom = sc.competences?.referentiels?.nom || null;
 
   // Compétences liées : démontrées par le même exercice (voir registre.js).
-  // On les résout dans le même référentiel que la compétence principale,
-  // pour ne pas risquer de valider une sous-compétence d'une autre classe
-  // qui porterait le même code.
-  const codesLies = (COMPETENCES_LIEES[referentielNom] || {})[sc.code] || [];
+  // sc.code peut être soit le code "principal" de l'exercice (ex. C5-3),
+  // soit un code "lié" (ex. C5-2) : on résout d'abord vers le code principal
+  // pour que le groupe de compétences à mettre à jour soit le même quel que
+  // soit le point d'entrée, puis on prend tous les codes liés à ce principal
+  // (le principal lui-même en moins, puisque sc.code le couvre déjà).
+  // On reste scopé au référentiel réel de cette sous-compétence pour ne pas
+  // risquer de valider une sous-compétence d'une autre classe qui porterait
+  // le même code.
+  const codePrincipal = (CODE_EXERCICE_PRINCIPAL[referentielNom] || {})[sc.code] || sc.code;
+  const codesLies = [
+    codePrincipal,
+    ...((COMPETENCES_LIEES[referentielNom] || {})[codePrincipal] || []),
+  ].filter((code) => code !== sc.code);
   let sousCompetencesLiees = [];
   if (codesLies.length > 0) {
     const { data: liees } = await supabase

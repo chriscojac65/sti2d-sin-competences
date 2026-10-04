@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { enregistrerResultatRemediation } from "./actions";
-import { GENERATEURS } from "@/lib/remediation/registre";
+import { GENERATEURS, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
 
 const COLORS = {
   bg: "#F7F5F0",
@@ -577,7 +577,13 @@ export default function RemediationScreen({
   // Les codes de sous-compétence ne sont uniques qu'au sein d'un référentiel
   // (voir registre.js) : on ne va donc chercher le générateur que dans celui
   // de cette sous-compétence, jamais par le seul code.
-  const generateur = (GENERATEURS[referentielNom] || {})[sousCompetence.code];
+  // Un code "lié" (ex. C5-2) n'a pas de générateur propre : il partage celui
+  // de son code "principal" (ex. C5-3). On résout donc toujours vers le code
+  // principal avant de chercher le générateur, que la page ait été ouverte
+  // via le code principal ou via un code lié.
+  const codePrincipal =
+    (CODE_EXERCICE_PRINCIPAL[referentielNom] || {})[sousCompetence.code] || sousCompetence.code;
+  const generateur = (GENERATEURS[referentielNom] || {})[codePrincipal];
 
   const [streak, setStreak] = useState(streakInitial);
   const [valide, setValide] = useState(valideInitial);
