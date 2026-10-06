@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ajouterEleve, importerElevesExcel, modifierEleve, supprimerEleve } from "./actions";
+import { ajouterEleve, importerElevesExcel, modifierEleve, supprimerEleve, reinitialiserMotDePasse } from "./actions";
 
 const COLORS = {
   surface: "#FFFFFF",
@@ -20,6 +20,7 @@ export default function ElevesManager({ classeId, eleves }) {
   const router = useRouter();
   const [tab, setTab] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [pwdId, setPwdId] = useState(null);
 
   return (
     <div>
@@ -49,11 +50,14 @@ export default function ElevesManager({ classeId, eleves }) {
         {eleves.map((e) =>
           editingId === e.id ? (
             <EditRow key={e.id} eleve={e} classeId={classeId} onDone={() => { setEditingId(null); router.refresh(); }} />
+          ) : pwdId === e.id ? (
+            <PasswordRow key={e.id} eleve={e} onDone={() => setPwdId(null)} />
           ) : (
             <Row
               key={e.id}
               eleve={e}
               onEdit={() => setEditingId(e.id)}
+              onPassword={() => setPwdId(e.id)}
               onDelete={async () => {
                 if (!confirm(`Supprimer ${e.prenom} ${e.nom} ? Son compte de connexion sera aussi supprimé.`)) return;
                 const fd = new FormData();
@@ -70,7 +74,7 @@ export default function ElevesManager({ classeId, eleves }) {
   );
 }
 
-function Row({ eleve, onEdit, onDelete }) {
+function Row({ eleve, onEdit, onPassword, onDelete }) {
   return (
     <div
       style={{
@@ -96,10 +100,86 @@ function Row({ eleve, onEdit, onDelete }) {
         <button style={btnGhost} onClick={onEdit}>
           Modifier
         </button>
+        <button style={btnGhost} onClick={onPassword}>
+          Mot de passe
+        </button>
         <button style={{ ...btnGhost, color: COLORS.red }} onClick={onDelete}>
           Supprimer
         </button>
       </div>
+    </div>
+  );
+}
+
+function PasswordRow({ eleve, onDone }) {
+  const [mdp, setMdp] = useState("");
+  const [error, setError] = useState("");
+  const [fait, setFait] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const fd = new FormData();
+    fd.set("id", eleve.id);
+    fd.set("mot_de_passe", mdp);
+    const result = await reinitialiserMotDePasse(fd);
+    setLoading(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    setFait(mdp);
+  }
+
+  return (
+    <div
+      style={{
+        background: COLORS.surface,
+        border: `1px solid ${COLORS.accent}`,
+        borderRadius: 10,
+        padding: "10px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+        Nouveau mot de passe — {eleve.prenom} {eleve.nom}{" "}
+        <span style={{ fontWeight: 400, color: COLORS.text2 }}>(identifiant : {eleve.identifiant})</span>
+      </div>
+      {fait ? (
+        <>
+          <div style={{ background: COLORS.greenBg, color: COLORS.green, borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>
+            Mot de passe modifié. Nouveau mot de passe : <b style={{ fontFamily: "monospace", fontSize: 14 }}>{fait}</b>
+          </div>
+          <div>
+            <button type="button" style={btnGhost} onClick={onDone}>
+              Fermer
+            </button>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, flex: 1, minWidth: 180 }}>
+            Mot de passe (8 caractères minimum)
+            <input
+              value={mdp}
+              onChange={(ev) => setMdp(ev.target.value)}
+              required
+              style={{ border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13.5, fontFamily: "monospace" }}
+            />
+          </label>
+          <button type="submit" disabled={loading || mdp.length < 8} style={btnPrimarySmall}>
+            {loading ? "..." : "Enregistrer"}
+          </button>
+          <button type="button" style={btnGhost} onClick={onDone}>
+            Annuler
+          </button>
+          {error && <div style={{ color: COLORS.red, fontSize: 12, width: "100%" }}>{error}</div>}
+        </form>
+      )}
     </div>
   );
 }
