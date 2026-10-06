@@ -188,3 +188,41 @@ export async function supprimerEleve(formData) {
   revalidatePath(`/dashboard/classes/${classe_id}`);
   return { success: true };
 }
+
+export async function reinitialiserMotDePasse(formData) {
+  try {
+    const supabase = await requireProf();
+    const admin = createAdminClient();
+
+    const id = formData.get("id")?.toString();
+    const mot_de_passe = formData.get("mot_de_passe")?.toString();
+
+    if (!mot_de_passe || mot_de_passe.length < 8) {
+      return { error: "Le mot de passe doit faire au moins 8 caractères." };
+    }
+
+    // La lecture passe par le client du prof : seuls ses propres élèves sont visibles.
+    const { data: eleve, error: lectureError } = await supabase
+      .from("eleves")
+      .select("auth_user_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (lectureError) return { error: `Lecture de l'élève : ${lectureError.message}` };
+    if (!eleve?.auth_user_id) {
+      return { error: "Élève introuvable ou sans compte de connexion." };
+    }
+
+    const { error } = await admin.auth.admin.updateUserById(eleve.auth_user_id, {
+      password: mot_de_passe,
+    });
+    if (error) return { error: `Supabase : ${error.message}` };
+
+    return { success: true };
+  } catch (err) {
+    // redirect() de Next.js passe par une exception : on la laisse remonter.
+    if (err?.digest?.startsWith?.("NEXT_REDIRECT")) throw err;
+    console.error("reinitialiserMotDePasse", err);
+    return { error: `Erreur serveur : ${err?.message || err}` };
+  }
+}

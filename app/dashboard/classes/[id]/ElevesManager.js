@@ -124,13 +124,18 @@ function PasswordRow({ eleve, onDone }) {
     const fd = new FormData();
     fd.set("id", eleve.id);
     fd.set("mot_de_passe", mdp);
-    const result = await reinitialiserMotDePasse(fd);
-    setLoading(false);
-    if (result?.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await reinitialiserMotDePasse(fd);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      setFait(mdp);
+    } catch (err) {
+      setError("Échec de l'enregistrement : " + (err?.message || "erreur inconnue") + ". Rechargez la page (Ctrl+F5) et réessayez.");
+    } finally {
+      setLoading(false);
     }
-    setFait(mdp);
   }
 
   return (
