@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { enregistrerResultatRemediation } from "./actions";
 import { GENERATEURS, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
+import { elementsBode, elementsFiltreRC } from "@/lib/remediation/dessins-filtre";
 
 const COLORS = {
   bg: "#F7F5F0",
@@ -415,13 +416,51 @@ function SchemaContacts({ branches }) {
   );
 }
 
+// --- Dessins du filtre passe-bas (courbe de Bode, schéma RC) --------------
+// Les descripteurs viennent de lib/remediation/dessins-filtre.js ; on ne
+// fait ici que les transformer en éléments SVG.
+
+function DessinSVG({ dessin, largeurMax }) {
+  const { W, H, items } = dessin;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: "100%", maxWidth: largeurMax || W, height: "auto", display: "block", margin: "0 auto" }}
+      role="img"
+    >
+      {items.map((it, i) => {
+        if (it.t === "line")
+          return <line key={i} x1={it.x1} y1={it.y1} x2={it.x2} y2={it.y2} stroke={it.stroke} strokeWidth={it.sw} />;
+        if (it.t === "path")
+          return <path key={i} d={it.d} stroke={it.stroke} strokeWidth={it.sw} fill={it.fill || "none"} />;
+        if (it.t === "rect")
+          return (
+            <rect key={i} x={it.x} y={it.y} width={it.w} height={it.h} stroke={it.stroke} strokeWidth={it.sw} fill={it.fill || "none"} />
+          );
+        if (it.t === "circle")
+          return (
+            <circle key={i} cx={it.cx} cy={it.cy} r={it.r} fill={it.fill || "none"} stroke={it.stroke || "none"} strokeWidth={it.sw || 0} />
+          );
+        if (it.t === "text")
+          return (
+            <text key={i} x={it.x} y={it.y} textAnchor={it.anchor} fontSize={it.size} fill={it.fill} fontWeight={it.bold ? 700 : 400}>
+              {it.s}
+            </text>
+          );
+        return null;
+      })}
+    </svg>
+  );
+}
+
 // --- Rendu de la présentation de l'exercice -------------------------------
 // "chronogramme" : un relevé de signal (trame série). "logigramme" : un
 // schéma à base de portes ET/OU/NON. "schema-contacts" : un schéma à
 // contacts (NO/NF) et bobine. "texte" : un énoncé textuel (cahier des
 // charges, circuit électrique...) — si l'exercice le demande (ex. faire un
 // schéma sur papier), presentation.avertissement porte le rappel à
-// afficher ; sinon aucun bandeau n'apparaît.
+// afficher ; sinon aucun bandeau n'apparaît. "bode" : courbe de gain d'un filtre
+// passe-bas (lecture de fc). "filtre-rc" : schéma R-C avec ses valeurs.
 
 function Presentation({ presentation }) {
   if (presentation.kind === "schema-contacts") {
@@ -515,6 +554,42 @@ function Presentation({ presentation }) {
         <div style={{ overflowX: "auto" }}>
           <ChronogrammeEntrees entrees={presentation.entrees} trames={presentation.trames} />
         </div>
+      </div>
+    );
+  }
+
+  if (presentation.kind === "bode") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8, lineHeight: 1.4 }}>{presentation.enonce}</div>
+        <div style={{ overflowX: "auto" }}>
+          <DessinSVG dessin={elementsBode(presentation.palier, presentation.fc)} largeurMax={520} />
+        </div>
+      </div>
+    );
+  }
+
+  if (presentation.kind === "filtre-rc") {
+    return (
+      <div
+        style={{
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "14px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 8, lineHeight: 1.4 }}>{presentation.enonce}</div>
+        <DessinSVG dessin={elementsFiltreRC(`R = ${presentation.R}`, `C = ${presentation.C}`)} largeurMax={360} />
       </div>
     );
   }
