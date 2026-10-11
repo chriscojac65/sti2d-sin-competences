@@ -5,6 +5,7 @@ import Link from "next/link";
 import { enregistrerResultatRemediation } from "./actions";
 import { GENERATEURS, CODE_EXERCICE_PRINCIPAL } from "@/lib/remediation/registre";
 import { elementsBode, elementsFiltreRC } from "@/lib/remediation/dessins-filtre";
+import { elementsGrafcet } from "@/lib/remediation/dessins-grafcet";
 
 const COLORS = {
   bg: "#F7F5F0",
@@ -623,6 +624,44 @@ function Presentation({ presentation }) {
             marginBottom: 16,
             fontSize: 13.5,
             lineHeight: 1.5,
+            whiteSpace: "pre-line",
+          }}
+        >
+          {presentation.enonce}
+        </div>
+      </>
+    );
+  }
+
+  if (presentation.kind === "grafcet") {
+    const dessin = elementsGrafcet(presentation.steps, {
+      loop: true,
+      jeton: presentation.jeton,
+      surligne: presentation.surligne,
+    });
+    return (
+      <>
+        <div
+          style={{
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 12,
+            padding: "14px",
+            marginBottom: 12,
+          }}
+        >
+          <DessinSVG dessin={dessin} largeurMax={320} />
+        </div>
+        <div
+          style={{
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 12,
+            padding: "14px",
+            marginBottom: 16,
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            whiteSpace: "pre-line",
           }}
         >
           {presentation.enonce}
@@ -774,10 +813,11 @@ export default function RemediationScreen({
         <Presentation presentation={exercice.presentation} />
 
         {exercice.questions.map((q, i) => {
-          const QuestionComposant = q.rendu === "chronogramme" ? QuestionQCMChronogramme : QuestionQCM;
+          const QuestionComposant =
+            q.rendu === "chronogramme" ? QuestionQCMChronogramme : q.rendu === "grafcet" ? QuestionQCMGrafcet : QuestionQCM;
           return (
+            <div key={i}>
             <QuestionComposant
-              key={i}
               label={q.label}
               options={q.options}
               valeur={reponses[i]}
@@ -792,6 +832,24 @@ export default function RemediationScreen({
               correcte={q.correcte}
               afficherCorrection={!!resultat}
             />
+            {resultat && q.explication && (
+              <div
+                style={{
+                  background: COLORS.accentBg,
+                  border: `1px solid ${COLORS.accent}44`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  marginTop: -4,
+                  marginBottom: 14,
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-line",
+                }}
+              >
+                <strong>Explication.</strong> {q.explication}
+              </div>
+            )}
+            </div>
           );
         })}
 
@@ -984,6 +1042,56 @@ function QuestionQCM({ label, options, valeur, onChange, desactive, correcte, af
               }}
             >
               {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Options dessinées (grafcets) : chaque option est un JSON {loop, steps}.
+function QuestionQCMGrafcet({ label, options, valeur, onChange, desactive, correcte, afficherCorrection }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        {options.map((opt, idx) => {
+          const selectionne = valeur === opt;
+          const estCorrecte = afficherCorrection && opt === correcte;
+          const estMauvaiseSelection = afficherCorrection && selectionne && opt !== correcte;
+          const d = JSON.parse(opt);
+          const dessin = elementsGrafcet(d.steps, { loop: d.loop, compact: true });
+          return (
+            <button
+              key={opt}
+              type="button"
+              disabled={desactive}
+              onClick={() => onChange(opt)}
+              style={{
+                padding: "8px",
+                borderRadius: 8,
+                background: estCorrecte
+                  ? COLORS.greenBg
+                  : estMauvaiseSelection
+                  ? COLORS.redBg
+                  : selectionne
+                  ? COLORS.accentBg
+                  : COLORS.surface,
+                border: `2px solid ${
+                  estCorrecte
+                    ? COLORS.green
+                    : estMauvaiseSelection
+                    ? COLORS.red
+                    : selectionne
+                    ? COLORS.accent
+                    : COLORS.border
+                }`,
+                cursor: desactive ? "default" : "pointer",
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Proposition {String.fromCharCode(65 + idx)}</div>
+              <DessinSVG dessin={dessin} largeurMax={200} />
             </button>
           );
         })}
