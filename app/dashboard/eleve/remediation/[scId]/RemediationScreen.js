@@ -539,7 +539,7 @@ function Presentation({ presentation }) {
         }}
       >
         <div style={{ fontSize: 12, color: COLORS.text2, marginBottom: 2 }}>
-          Équation à appliquer aux signaux d'entrée :
+          {presentation.intitule || "Équation à appliquer aux signaux d'entrée :"}
         </div>
         <div
           style={{
