@@ -111,6 +111,19 @@ export default async function SuiviPage({ params }) {
       })
     : [];
 
+  // Progression en remédiation (exercices d'entraînement) : une ligne par
+  // élève et par sous-compétence travaillée (série de réussites, validation).
+  const progres = eleveIds.length
+    ? await recupererToutesLesLignes(
+        supabase,
+        "remediation_progres",
+        "eleve_id, sous_competence_id, streak_actuel, valide, date_validation",
+        { colonne: "eleve_id", valeurs: eleveIds }
+      )
+    : [];
+  const progresParCle = new Map();
+  for (const p of progres) progresParCle.set(`${p.eleve_id}|${p.sous_competence_id}`, p);
+
   const statsConnexionParEleve = new Map();
   for (const c of connexions) {
     const actuel = statsConnexionParEleve.get(c.eleve_id) || { nombre: 0, derniere: null };
@@ -152,6 +165,20 @@ export default async function SuiviPage({ params }) {
   const sousCompetences = Array.from(sousCompetencesMap.entries())
     .map(([id, sc]) => ({ id, ...sc }))
     .sort((a, b) => a.code.localeCompare(b.code));
+
+  const OBJECTIF_REMEDIATION = 3;
+  function progresRemediation(eleveId, sc) {
+    if (!codesAvecRemediation.has(sc.code)) return null;
+    return progresParCle.get(`${eleveId}|${sc.id}`) || null;
+  }
+  function nbValideesParRemediation(eleveId) {
+    return sousCompetences.filter((sc) => progresRemediation(eleveId, sc)?.valide).length;
+  }
+  function formatDateCourte(d) {
+    if (!d) return "";
+    const dt = new Date(d);
+    return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  }
 
   function noteEleveTp(eleveId, tp) {
     const questionsTp = tp.questions || [];
@@ -226,6 +253,12 @@ export default async function SuiviPage({ params }) {
           Colonnes de compétence : pourcentage de réussite cumulé sur les questions évaluées liées à cette
           compétence. Le badge EVAL indique que le pourcentage n'est calculé que sur les évaluations ; le badge
           TP indique un calcul sur tous les TP confondus. Seuil de validation : {SEUIL_ACQUIS}%.
+        </p>
+        <p style={{ fontSize: 12, color: COLORS.text2, margin: "-12px 0 20px" }}>
+          Sous le pourcentage, pour les compétences qui ont un exercice de remédiation :{" "}
+          <strong style={{ color: COLORS.green }}>✓ jj/mm</strong> = validée par remédiation à cette date (3
+          réussites de suite) ; <strong style={{ color: COLORS.accent }}>n/3</strong> = entraînement en cours ;
+          rien = l'élève n'a pas encore essayé. Le pourcentage, lui, reste celui de l'évaluation.
         </p>
 
         {(eleves || []).length === 0 ? (
@@ -323,6 +356,15 @@ export default async function SuiviPage({ params }) {
                             )}`;
                           })()}
                         </div>
+                        {(() => {
+                          const n = nbValideesParRemediation(eleve.id);
+                          if (n === 0) return null;
+                          return (
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: COLORS.green, marginTop: 1 }}>
+                              ✓ {n} validée{n > 1 ? "s" : ""} par remédiation
+                            </div>
+                          );
+                        })()}
                       </td>
                       {(tps || []).map((tp) => {
                         const note = noteEleveTp(eleve.id, tp);
@@ -354,6 +396,11 @@ export default async function SuiviPage({ params }) {
                             }}
                           >
                             <PourcentageBadge pourcentage={pourcentage} />
+                            <RemediationMarque
+                              progres={progresRemediation(eleve.id, sc)}
+                              objectif={OBJECTIF_REMEDIATION}
+                              dateCourte={formatDateCourte(progresRemediation(eleve.id, sc)?.date_validation)}
+                            />
                           </td>
                         );
                       })}
@@ -491,5 +538,21 @@ function PourcentageBadge({ pourcentage }) {
     >
       {pourcentage}%
     </span>
+  );
+}
+
+function RemediationMarque({ progres, objectif, dateCourte }) {
+  if (!progres) return null;
+  if (progres.valide) {
+    return (
+      <div style={{ marginTop: 3, fontSize: 10.5, fontWeight: 700, color: COLORS.green, whiteSpace: "nowrap" }}>
+        ✓ {dateCourte}
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 3, fontSize: 10.5, fontWeight: 700, color: COLORS.accent, whiteSpace: "nowrap" }}>
+      {progres.streak_actuel || 0}/{objectif}
+    </div>
   );
 }
